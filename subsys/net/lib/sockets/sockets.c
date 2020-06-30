@@ -35,6 +35,7 @@ LOG_MODULE_REGISTER(net_sock, CONFIG_NET_SOCKETS_LOG_LEVEL);
 		const struct socket_op_vtable *vtable; \
 		void *ctx = get_sock_vtable(sock, &vtable); \
 		if (ctx == NULL || vtable->fn == NULL) { \
+			errno = EBADF; \
 			return -1; \
 		} \
 		return vtable->fn(ctx, __VA_ARGS__); \
@@ -248,6 +249,7 @@ int z_impl_zsock_close(int sock)
 	void *ctx = get_sock_vtable(sock, &vtable);
 
 	if (ctx == NULL) {
+		errno = EBADF;
 		return -1;
 	}
 
@@ -463,7 +465,21 @@ int zsock_accept_ctx(struct net_context *parent, struct sockaddr *addr,
 	ctx = k_fifo_get(&parent->accept_q, timeout);
 	if (ctx == NULL) {
 		z_free_fd(fd);
-		errno = EAGAIN;
+		if (K_TIMEOUT_EQ(timeout, K_NO_WAIT)) {
+			/* For non-blocking sockets return EAGAIN because it
+			 * just means the fifo is empty at this time
+			 */
+			errno = EAGAIN;
+		} else {
+			/* For blocking sockets return EINVAL because it means
+			 * the socket was closed while we were waiting for
+			 * connections. This is the same error code returned
+			 * under Linux when calling shutdown on a blocked accept
+			 * call
+			 */
+			errno = EINVAL;
+		}
+
 		return -1;
 	}
 
@@ -739,7 +755,7 @@ static int sock_get_pkt_src_addr(struct net_pkt *pkt,
 {
 	int ret = 0;
 	struct net_pkt_cursor backup;
-	u16_t *port;
+	uint16_t *port;
 
 	if (!addr || !pkt) {
 		return -EINVAL;
@@ -1088,6 +1104,7 @@ int z_impl_zsock_fcntl(int sock, int cmd, int flags)
 
 	obj = get_sock_vtable(sock, &vtable);
 	if (obj == NULL) {
+		errno = EBADF;
 		return -1;
 	}
 
@@ -1155,9 +1172,9 @@ static int zsock_poll_update_ctx(struct net_context *ctx,
 	return 0;
 }
 
-static inline int time_left(u32_t start, u32_t timeout)
+static inline int time_left(uint32_t start, uint32_t timeout)
 {
-	u32_t elapsed = k_uptime_get_32() - start;
+	uint32_t elapsed = k_uptime_get_32() - start;
 
 	return timeout - elapsed;
 }
@@ -1173,7 +1190,7 @@ int z_impl_zsock_poll(struct zsock_pollfd *fds, int nfds, int poll_timeout)
 	struct k_poll_event *pev_end = poll_events + ARRAY_SIZE(poll_events);
 	const struct fd_op_vtable *vtable;
 	k_timeout_t timeout;
-	u64_t end;
+	uint64_t end;
 
 	if (poll_timeout < 0) {
 		timeout = K_FOREVER;
@@ -1230,7 +1247,7 @@ int z_impl_zsock_poll(struct zsock_pollfd *fds, int nfds, int poll_timeout)
 
 	if (!K_TIMEOUT_EQ(timeout, K_NO_WAIT) &&
 	    !K_TIMEOUT_EQ(timeout, K_FOREVER)) {
-		s64_t remaining = end - z_tick_get();
+		int64_t remaining = end - z_tick_get();
 
 		if (remaining <= 0) {
 			timeout = K_NO_WAIT;
@@ -1295,7 +1312,7 @@ int z_impl_zsock_poll(struct zsock_pollfd *fds, int nfds, int poll_timeout)
 			}
 
 			if (!K_TIMEOUT_EQ(timeout, K_FOREVER)) {
-				s64_t remaining = end - z_tick_get();
+				int64_t remaining = end - z_tick_get();
 
 				if (remaining <= 0) {
 					break;
@@ -1582,8 +1599,8 @@ int zsock_getsockname_ctx(struct net_context *ctx, struct sockaddr *addr,
 	socklen_t newlen = 0;
 
 	/* If we don't have a connection handler, the socket is not bound */
-	if (ctx->conn_handler) {
-		SET_ERRNO(EINVAL);
+	if (!ctx->conn_handler) {
+		SET_ERRNO(-EINVAL);
 	}
 
 	if (IS_ENABLED(CONFIG_NET_IPV4) && ctx->local.family == AF_INET) {
@@ -1608,7 +1625,7 @@ int zsock_getsockname_ctx(struct net_context *ctx, struct sockaddr *addr,
 
 		memcpy(addr, &addr6, MIN(*addrlen, newlen));
 	} else {
-		SET_ERRNO(EINVAL);
+		SET_ERRNO(-EINVAL);
 	}
 
 	*addrlen = newlen;
@@ -1623,6 +1640,7 @@ int z_impl_zsock_getsockname(int sock, struct sockaddr *addr,
 	void *ctx = get_sock_vtable(sock, &vtable);
 
 	if (ctx == NULL) {
+		errno = EBADF;
 		return -1;
 	}
 

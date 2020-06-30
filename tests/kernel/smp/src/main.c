@@ -181,7 +181,7 @@ static void thread_entry(void *p1, void *p2, void *p3)
 static void spin_for_threads_exit(void)
 {
 	for (int i = 0; i < THREADS_NUM - 1; i++) {
-		volatile u8_t *p = &tinfo[i].tid->base.thread_state;
+		volatile uint8_t *p = &tinfo[i].tid->base.thread_state;
 
 		while (!(*p & _THREAD_DEAD)) {
 		}
@@ -447,7 +447,7 @@ void test_main(void)
 	 * thread from which they can exit correctly to run the main
 	 * test.
 	 */
-	k_sleep(K_MSEC(1000));
+	k_sleep(K_MSEC(10));
 
 	ztest_test_suite(smp,
 			 ztest_unit_test(test_smp_coop_threads),

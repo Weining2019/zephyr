@@ -9,6 +9,8 @@ We are pleased to announce the release of Zephyr RTOS version 2.4.0.
 
 Major enhancements with this release include:
 
+* Moved to using C99 integer types and deprecate Zephyr integer types.  The
+  Zephyr types can be enabled by Kconfig DEPRECATED_ZEPHYR_INT_TYPES option.
 
 The following sections provide detailed lists of changes by component.
 
@@ -32,6 +34,13 @@ interface and listing all issues with the `bug label
 API Changes
 ***********
 
+* Moved to using C99 integer types and deprecate Zephyr integer types.  The
+  Zephyr types can be enabled by Kconfig DEPRECATED_ZEPHYR_INT_TYPES option.
+
+* The ``<sys/util.h>`` header has been promoted to a documented API with
+  :ref:`experimental stability <api_lifecycle>`. See :ref:`util_api` for an API
+  reference.
+
 Deprecated in this release
 ==========================
 
@@ -39,6 +48,10 @@ Deprecated in this release
 Removed APIs in this release
 ============================
 
+* Other
+
+  * The deprecated ``MACRO_MAP`` macro has been removed from the
+    :ref:`util_api`. Use ``FOR_EACH`` instead.
 
 Stable API changes in this release
 ==================================

@@ -41,7 +41,7 @@ K_SEM_DEFINE(expect_fault_sem, 0, 1);
  * ztest and this test suite. part1 is for
  * subsequent test specifically for this new implementation.
  */
-FOR_EACH(K_APPMEM_PARTITION_DEFINE, part0, part1);
+FOR_EACH(K_APPMEM_PARTITION_DEFINE, (;), part0, part1);
 
 /*
  * Create memory domains. dom0 is for the ztest and this
@@ -273,7 +273,7 @@ static void test_write_kerntext(void)
 static int kernel_data;
 
 /**
- * @brief Testto read from kernel data section
+ * @brief Test to read from kernel data section
  *
  * @ingroup kernel_memprotect_tests
  */
@@ -309,7 +309,7 @@ static void test_write_kernel_data(void)
  */
 K_APP_DMEM(part0) volatile char *priv_stack_ptr;
 #if defined(CONFIG_ARC)
-K_APP_DMEM(part0) s32_t size = (0 - CONFIG_PRIVILEGED_STACK_SIZE -
+K_APP_DMEM(part0) int32_t size = (0 - CONFIG_PRIVILEGED_STACK_SIZE -
 			       STACK_GUARD_SIZE);
 #endif
 
@@ -555,10 +555,13 @@ static void umode_enter_func(void)
 }
 
 /**
- * @brief Test to check enter to usermode
- *
- * @ingroup kernel_memprotect_tests
- */
+* @brief Test to check supervisor thread enter one-way to usermode
+*
+* @details A thread running in supervisor mode must have one-way operation
+* ability to drop privileges to user mode.
+*
+* @ingroup kernel_memprotect_tests
+*/
 static void test_user_mode_enter(void)
 {
 	expect_fault = false;
@@ -659,7 +662,7 @@ static void test_access_other_memdomain(void)
 
 
 #if defined(CONFIG_ARM)
-extern u8_t *z_priv_stack_find(void *obj);
+extern uint8_t *z_priv_stack_find(void *obj);
 #endif
 extern k_thread_stack_t ztest_thread_stack[];
 
@@ -709,8 +712,10 @@ static void test_domain_add_thread_drop_to_user(void)
 	k_thread_user_mode_enter(user_half, NULL, NULL, NULL);
 }
 
-/* Show that adding a partition to a domain and then dropping to user mode
- * works as expected.
+/* @brief Test adding application memory partition to memory domain
+ *
+ * @details Show that adding a partition to a domain and then dropping to user
+ * mode works as expected.
  *
  * @ingroup kernel_memprotect_tests
  */
@@ -932,7 +937,7 @@ static inline int z_vrfy_check_perms(void *addr, size_t size, int write)
 void stack_buffer_scenarios(k_thread_stack_t *stack_obj, size_t obj_size)
 {
 	size_t stack_size, unused;
-	u8_t val;
+	uint8_t val;
 	char *stack_start, *stack_ptr, *stack_end, *obj_start, *obj_end;
 	volatile char *pos;
 	int ret, expected;
@@ -1045,7 +1050,7 @@ void stest_thread_entry(void *p1, void *p2, void *p3)
 	}
 }
 
-void stest_thread_launch(void *stack_obj, size_t obj_size, u32_t flags,
+void stest_thread_launch(void *stack_obj, size_t obj_size, uint32_t flags,
 			 bool drop)
 {
 	int ret;
@@ -1105,6 +1110,15 @@ void test_unimplemented_syscall(void)
 	missing_syscall();
 }
 
+/**
+ * @brief Test bad syscall handler
+ *
+ * @details When a system call handler decides to terminate the calling thread,
+ * the kernel will produce error which indicates the context, where the faulting
+ * system call was made from user code.
+ *
+ * @ingroup kernel_memprotect_tests
+ */
 void test_bad_syscall(void)
 {
 	expect_fault = true;

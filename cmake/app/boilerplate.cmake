@@ -9,10 +9,10 @@
 # one of those lines:
 #
 # find_package(Zephyr)
-# find_package(Zephyr HINTS $ENV{ZEPHYR_BASE})
+# find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 #
-# The `HINTS $ENV{ZEPHYR_BASE}` variant is required for any application inside
-# the Zephyr repository.
+# The `REQUIRED HINTS $ENV{ZEPHYR_BASE}` variant is required for any application
+# inside the Zephyr repository.
 #
 # It exists to reduce boilerplate code that Zephyr expects to be in
 # application CMakeLists.txt code.
@@ -332,6 +332,7 @@ foreach(root ${BOARD_ROOT})
   # x_nucleo_iks01a1/x_nucleo_iks01a1.overlay;x_nucleo_iks01a2/x_nucleo_iks01a2.overlay
   # we construct a list of shield names by extracting file name and
   # removing the extension.
+  unset(SHIELD_LIST)
   foreach(shield_path ${shields_refs_list})
     get_filename_component(shield ${shield_path} NAME_WE)
     list(APPEND SHIELD_LIST ${shield})
