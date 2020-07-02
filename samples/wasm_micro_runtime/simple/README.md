@@ -1,16 +1,8 @@
-
-
-"simple" sample introduction
+Introduction
 ==============
+This sample builds out both host tools running on the host side, and an application running on the device side. The device application consists of iwasm, application library, application manager, timers and sensors support. The device runs on Zephyr OS and interacts with host tools.
 
-This sample demonstrates following scenarios:
-
-- Use tool "host_tool" to remotely install/uninstall wasm applications from the WAMR runtime over either TCP socket or UART cable
-- Inter-app communication programming models
-- Communication between WASM applications and the remote app host_tool
-- A number of WASM applications built on top of WAMR application framework API sets
-
-
+It demonstrates an end to end scenario, the wasm applications life cycle management and communication programming models.
 
 Directory structure
 ------------------------------
@@ -18,13 +10,13 @@ Directory structure
 simple/
 ├── build.sh
 ├── CMakeLists.txt
+├── prj.conf
 ├── README.md
 ├── src
 │   ├── ext_lib_export.c
 │   ├── iwasm_main.c
 │   └── main.c
 └── wasm-apps
-    ├── connection.c
     ├── event_publisher.c
     ├── event_subscriber.c
     ├── request_handler.c
@@ -33,14 +25,18 @@ simple/
     └── timer.c
 ```
 
+- build.sh<br/>
+  The script to build all binaries.
+- CMakeLists.txt<br/>
+  CMake file used to build the simple application.
+- prj.conf<br/>
+  Zephy project configuration file.
+- README.md<br/>
+  The file you are reading currently.
 - src/ext_lib_export.c<br/>
-  This file is used to export native APIs. See the `The mechanism of exporting Native API to WASM application` section in WAMR README.md for detail.
+  This file is used to export native APIs. See the `The mechanism of exporting Native API to WASM application` section in [WAMR](https://github.com/intel/wasm-micro-runtime) README.md for detail.
 - src/iwam_main.c<br/>
   This file is the implementation by platform integrator. It implements the interfaces that enable the application manager communicating with the host side. See `{WAMR_ROOT}/core/app-mgr/app-mgr-shared/app_manager_export.h` for the definition of the host interface.
-## Set physical communication between device and remote
-
-
-
 ```
 /* Interfaces of host communication */
 typedef struct host_interface {
@@ -48,82 +44,64 @@ typedef struct host_interface {
     host_send_fun send;
     host_destroy_fun destroy;
 } host_interface;
-
 ```
-The `host_init_func` is called when the application manager starts up. And `host_send_fun` is called by the application manager to send data to the host.
-
-Define a global variable "interface" of the data structure:
-
 ```
-
 host_interface interface = {
     .init = host_init,
     .send = host_send,
     .destroy = host_destroy
 };
 ```
-This interface is passed to application manager during the runtime startup:
+This interface is passed to application manager by calling
 ```
 app_manager_startup(&interface);
 ```
 
->
+The `host_init_func` is called when the application manager starts up. And `host_send_fun` is called by the application manager to send data to the host.
+>**Note:** Currently application manager keeps running and never exit, `host_destroy_fun` has no chance to get executed. So you can leave this API implementation empty.
 
-**Note:** The connection between simple and host_tool is TCP by default. The simple application works as a server and the host_tool works as a client. You can also use UART connection. To achieve this you have to uncomment the below line in CMakeLists.txt and rebuild. 
+- src/main.c<br/>
+  The main file.
+- wasm-apps<br/>
+  Source files of sample wasm applications.
 
-```
-#add_definitions (-DCONNECTION_UART)`
-```
-
-To run the UART based test, you have to set up a UART hardware connection between host_tool and the simple application. See the help of host_tool for how to specify UART device parameters.
-
-
-Build the sample
+Install required SDK and libraries
 ==============
-Execute the build.sh script then all binaries including wasm application files would be generated in 'out' directory. 
-
+- Install EMSDK
 ```
-$ ./build.sh 
-Enter build target profile (default=host-interp) -->
-arm-interp
-host-aot
-host-interp
-\>:
-
+    https://emscripten.org/docs/tools_reference/emsdk.html
 ```
 
-Enter the profile name for starting your build. "host-***" profiles build the sample for executing on your development machine, and "arm-interp" profile will do cross building for ARM target platform. If "arm-interp" is entered, please ensure the ARM cross compiler toolchain is already installed in your development machine. Your should set *ARM_A7_COMPILER_DIR* and *ARM_A7_SDKTARGETSYSROOT* environment variable in your ~/.bashrc correctly. refer to the file [profiles/arm-interp/toolchain.cmake](./profiles/arm-interp/toolchain.cmake).
-
+Prepare STM32 board and patch Zephyr
+==============
+Since you may install multiple wasm applications, it is recommended that RAM SIZE not less than 320KB. In our test we use nucleo_f767zi, which is not supported by Zephyr. However, nucleo_f767zi is almost the same as nucleo_f746zg, except FLASH and SRAM size. So we changed the DTS setting of nucleo_f746zg boards for a workaround. Apply below patch to Zephyr:
 ```
-~/.bashrc:
-export ARM_A7_COMPILER_DIR="/home/beihai/cross-toolchains/gcc-linaro-arm-linux-gnueabihf-4.7-2013.03-20130313_linux/bin"
-export ARM_A7_SDKTARGETSYSROOT="/home/beihai/cross-toolchains/gcc-linaro-arm-linux-gnueabihf-4.7-2013.03-20130313_linux/arm-linux-gnueabihf/libc"
-
-notes: please set the value to the actual path of your cross toolchain.
-```
-
-If you need to create additional profile for customizing your runtime, application framework or the target platforms, a new subfolder can be created under the *profiles* folder, and place your own version of "toolchain.cmake" and "wamr_config_simple.cmake" in it.
-
-```
-$wamr-root/samples/simple/profiles$ ls
-arm-interp  host-aot  host-interp
-$wamr-root/samples/simple/profiles$ ls arm-interp/
-toolchain.cmake  wamr_config_simple.cmake
-
+diff --git a/dts/arm/st/f7/stm32f746.dtsi b/dts/arm/st/f7/stm32f746.dtsi
+index 1bce3ad..401b4b1 100644
+--- a/dts/arm/st/f7/stm32f746.dtsi
++++ b/dts/arm/st/f7/stm32f746.dtsi
+@@ -11,7 +11,7 @@
+ 
+        sram0: memory@20010000 {
+                compatible = "mmio-sram";
+-               reg = <0x20010000 DT_SIZE_K(256)>;
++               reg = <0x20010000 DT_SIZE_K(320)>;
+        };
 ```
 
+Build all binaries
+==============
+After patching Zephyr, execute the build.sh script then all binaries including wasm application files would be generated in 'out' directory.
+`./build.sh`
 
-
-
-
-**Out directory structure**
-
+Out directory structure
+------------------------------
 ```
 out/
 ├── host_tool
-├── simple
+├── zephyr-build/zephyr
+│   └── zephyr.elf
 └── wasm-apps
-    ├── connection.wasm
     ├── event_publisher.wasm
     ├── event_subscriber.wasm
     ├── request_handler.wasm
@@ -131,32 +109,44 @@ out/
     ├── sensor.wasm
     └── timer.wasm
 ```
-
 - host_tool:
   A small testing tool to interact with WAMR. See the usage of this tool by executing "./host_tool -h".
   `./host_tool -h`
 
-- simple:
-  A simple testing tool running on the host side that interact with WAMR. It is used to install, uninstall and query WASM applications in WAMR, and send request or subscribe event, etc. See the usage of this application by executing "./simple -h".
-  `./simple -h`
->
+- zephry-build/zephyr/zephyr.elf:
+  The zephyr image file containing WAMR to be flashed to board. A simple testing tool running on the host side that interact with WAMR. It is used to install, uninstall and query WASM applications in WAMR, and send request or subscribe event, etc.
 
-Run the sample
+- wasm-apps:
+  Sample wasm applications that demonstrate all APIs of the WAMR programming model. The source codes are in the wasm-apps directory under the root of this sample.
+    + event_publisher.wasm<br/>
+    This application shows the sub/pub programming model. The pub application publishes the event "alert/overheat" by calling api_publish_event() API. The subscriber could be host_tool or other wasm application.
+    + event_subscriber.wasm<br/>
+    This application shows the sub/pub programming model. The sub application subscribes the "alert/overheat" event by calling api_subscribe_event() API so that it is able to receive the event once generated and published by the pub application. To make the process clear to interpret, the sub application dumps the event when receiving it.
+    + request_handler.wasm<br/>
+    This application shows the request/response programming model. The request handler application registers 2 resources(/url1 and /url2) by calling api_register_resource_handler() API. The request sender could be host_tool or other wasm application.
+    + request_sender.wasm<br/>
+    This application shows the request/response programming model. The sender application sends 2 requests, one is "/app/request_handler/url1" and the other is "url1". The former is an accurate request which explicitly specifies the name of request handler application in the middle of the URL and the later is a general request.
+    + sensor.wasm<br/>
+    This application shows the sensor programming model. It opens a test sensor and configures the sensor event generating interval to 1 second. To make the process clear to interpret, the application dumps the sensor event when receiving it.
+    + timer.wasm<br/>
+    This application shows the timer programming model. It creates a periodic timer that prints the current expiry number in every second.
+
+Run the scenario
 ==========================
-- Enter the out directory
+- Enter the zephyr-build directory<br/>
 ```
-$ cd ./out/
-```
-
-- Startup the 'simple' process works in TCP server mode and you would see "App Manager started." is printed.
-```
-$ ./simple -s
-App Manager started.
+$ cd ./out/zephyr-build/
 ```
 
-- Query all installed applications
+- Startup the board and falsh zephyr image and you would see "App Manager started." on board's terminal.<br/>
 ```
-$ ./host_tool -q
+$ ninja flash
+```
+
+- Query all installed applications<br/>
+```
+$ cd ..
+$ sudo ./host_tool -D /dev/ttyUSB0 -q
 
 response status 69
 {
@@ -164,19 +154,28 @@ response status 69
 }
 ```
 
-The `69` stands for response code SUCCESS. The payload is printed with JSON format where the `num` stands for application installations number and value `0` means currently no application is installed yet.
+The `69` stands for response status to this query request which means query success and a payload is attached with the response. See `{WAMR_ROOT}/core/iwasm/lib/app-libs/base/wasm_app.h` for the definitions of response codes. The payload is printed with JSON format where the `num` stands for application installations number and value `0` means currently no application is installed yet.
 
 - Install the request handler wasm application<br/>
 ```
-$ ./host_tool -i request_handler -f ./wasm-apps/request_handler.wasm
+$ sudo ./host_tool -D /dev/ttyUSB0 -i request_handler -f ./wasm-apps/request_handler.wasm
 
 response status 65
 ```
+The `65` stands for response status to this installation request which means success. 
+
+Output of board
+```
+Install WASM app success!
+sent 16 bytes to host
+WASM app 'request_handler' started
+```
+
 Now the request handler application is running and waiting for host or other wasm application to send a request.
 
-- Query again
+- Query again<br/>
 ```
-$ ./host_tool -q 
+$ sudo ./host_tool -D /dev/ttyUSB0 -q
 
 response status 69
 {
@@ -187,9 +186,9 @@ response status 69
 ```
 In the payload, we can see `num` is 1 which means 1 application is installed. `applet1`stands for the name of the 1st application. `heap1` stands for the heap size of the 1st application.
 
-- Send request from host to specific wasm application
+- Send request from host to specific wasm application<br/>
 ```
-$ ./host_tool -r /app/request_handler/url1 -A GET
+$ sudo ./host_tool -D /dev/ttyUSB0 -r /app/request_handler/url1 -A GET
 
 response status 69
 {
@@ -200,7 +199,7 @@ response status 69
 
 We can see a response with status `69` and a payload is received.
 
-Output of simple application:
+Output of board
 ```
 connection established!
 Send request to applet: request_handler
@@ -213,7 +212,7 @@ Wasm app process request success.
 
 - Send a general request from host (not specify target application name)<br/>
 ```
-$ ./host_tool -r /url1 -A GET
+$ sudo ./host_tool -D /dev/ttyUSB0 -r /url1 -A GET
 
 response status 69
 {
@@ -222,7 +221,7 @@ response status 69
 }
 ```
 
-Output of simple application:
+Output of board
 ```
 connection established!
 Send request to app request_handler success.
@@ -232,16 +231,16 @@ sent 150 bytes to host
 Wasm app process request success.
 ```
 
-- Install the event publisher wasm application
+- Install the event publisher wasm application<br/>
 ```
-$ ./host_tool -i pub -f ./wasm-apps/event_publisher.wasm
+$ sudo ./host_tool -D /dev/ttyUSB0 -i pub -f ./wasm-apps/event_publisher.wasm
 
 response status 65
 ```
 
 - Subscribe event by host_tool<br/>
 ```
-$ ./host_tool -s /alert/overheat -a 3000
+$ sudo ./host_tool -D /dev/ttyUSB0 -s /alert/overheat -a 3000
 
 response status 69
 
@@ -264,7 +263,7 @@ received an event alert/overheat
 ```
 We can see 4 `alert/overheat` events are received in 3 seconds which is published by the `pub` application.
 
-Output of simple
+Output of board
 ```
 connection established!
 am_register_event adding url:(alert/overheat)
@@ -277,13 +276,13 @@ sent 142 bytes to host
 ```
 - Install the event subscriber wasm application<br/>
 ```
-$ ./host_tool -i sub -f ./wasm-apps/event_subscriber.wasm
+$ sudo ./host_tool -D /dev/ttyUSB0 -i sub -f ./wasm-apps/event_subscriber.wasm
 
 response status 65
 ```
 The `sub` application is installed.
 
-Output of simple
+Output of board
 ```
 connection established!
 Install WASM app success!
@@ -314,22 +313,22 @@ Attribute list:
 
 - Uninstall the wasm application<br/>
 ```
-$ ./host_tool -u request_handler
+$ sudo ./host_tool -D /dev/ttyUSB0 -u request_handler
 
 response status 66
 
-$ ./host_tool -u pub
+$ sudo ./host_tool -D /dev/ttyUSB0 -u pub
 
 response status 66
 
-$ ./host_tool -u sub
+$ sudo ./host_tool -D /dev/ttyUSB0 -u sub
 
 response status 66
 ```
 
 - Query again<br/>
 ```
-$ ./host_tool -q
+$ sudo ./host_tool -D /dev/ttyUSB0 -q
 
 response status 69
 {
@@ -339,4 +338,3 @@ response status 69
 
   >**Note:** Here we only installed part of the sample WASM applications. You can try others by yourself.
 
-  >**Note:** You have to manually kill the simple process by Ctrl+C after use.

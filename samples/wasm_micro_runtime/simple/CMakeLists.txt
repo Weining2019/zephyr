@@ -1,35 +1,66 @@
-# Copyright (C) 2019 Intel Corporation.  All rights reserved.
-# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+# SPDX-License-Identifier: Apache-2.0
 
-cmake_minimum_required (VERSION 2.8)
+cmake_minimum_required(VERSION 3.8.2)
 
-project (simple)
+if (NOT BOARD)
+  set (BOARD nucleo_f746zg)
+endif ()
 
-################  wamr runtime settings  ################
-message(STATUS "WAMR_BUILD_SDK_PROFILE=${WAMR_BUILD_SDK_PROFILE}")
+include($ENV{ZEPHYR_BASE}/cmake/app/boilerplate.cmake NO_POLICY_SCOPE)
+project(wamr-simple)
 
-# Reset default linker flags
-set (CMAKE_SHARED_LIBRARY_LINK_C_FLAGS "")
-set (CMAKE_SHARED_LIBRARY_LINK_CXX_FLAGS "")
+enable_language (ASM)
 
-set (WAMR_ROOT_DIR ${CMAKE_CURRENT_LIST_DIR}/../..)
+add_definitions(-DWA_MALLOC=wasm_runtime_malloc)
+add_definitions(-DWA_FREE=wasm_runtime_free)
 
-## use library and headers in the SDK
-link_directories(${WAMR_ROOT_DIR}/wamr-sdk/out/${WAMR_BUILD_SDK_PROFILE}/runtime-sdk/lib)
-include_directories(
-    ${WAMR_ROOT_DIR}/wamr-sdk/out/${WAMR_BUILD_SDK_PROFILE}/runtime-sdk/include
-    ${WAMR_ROOT_DIR}/core/shared/utils
-    ${WAMR_ROOT_DIR}/core/shared/platform/linux
-)
+set (WAMR_BUILD_PLATFORM "zephyr")
 
-################  application related  ################
+# Build as THUMB by default
+# change to "ARM[sub]", "THUMB[sub]", "X86_32", "MIPS_32" or "XTENSA_32"
+# if we want to support arm_32, x86, mips or xtensa
+if (NOT DEFINED WAMR_BUILD_TARGET)
+  set (WAMR_BUILD_TARGET "THUMBV7")
+endif ()
 
-include_directories(${CMAKE_CURRENT_LIST_DIR}/src)
+if (NOT DEFINED WAMR_BUILD_INTERP)
+  # Enable Interpreter by default
+  set (WAMR_BUILD_INTERP 1)
+endif ()
 
-#Note: uncomment below line to use UART mode
-#add_definitions (-DCONNECTION_UART)
+if (NOT DEFINED WAMR_BUILD_AOT)
+  # Enable AOT by default.
+  set (WAMR_BUILD_AOT 1)
+endif ()
 
-add_executable (simple src/main.c src/iwasm_main.c)
-target_link_libraries (simple vmlib -lm -ldl -lpthread -lrt)
+if (NOT DEFINED WAMR_BUILD_LIBC_BUILTIN)
+  # Enable libc builtin support by default
+  set (WAMR_BUILD_LIBC_BUILTIN 1)
+endif ()
 
+if (NOT DEFINED WAMR_BUILD_LIBC_WASI)
+  # Disable libc wasi support by default
+  set (WAMR_BUILD_LIBC_WASI 0)
+endif ()
+
+if (NOT DEFINED WAMR_BUILD_APP_FRAMEWORK)
+  set (WAMR_BUILD_APP_FRAMEWORK 1)
+endif ()
+
+if (NOT DEFINED WAMR_BUILD_APP_LIST)
+  set (WAMR_BUILD_APP_LIST WAMR_APP_BUILD_BASE
+                           WAMR_APP_BUILD_SENSOR
+                           WAMR_APP_BUILD_CONNECTION)
+endif ()
+
+if (NOT WAMR_ROOT_DIR)
+  set (WAMR_ROOT_DIR
+       ${CMAKE_CURRENT_SOURCE_DIR}/../../../../modules/lib/wasm-micro-runtime)
+endif ()
+
+include (${WAMR_ROOT_DIR}/build-scripts/runtime_lib.cmake)
+
+target_sources(app PRIVATE
+               ${WAMR_RUNTIME_LIB_SOURCE}
+               src/iwasm_main.c src/main.c)
 
