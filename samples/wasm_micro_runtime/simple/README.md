@@ -1,6 +1,6 @@
 Introduction
 ==============
-This sample builds out both host tools running on the host side, and an application running on the device side. The device application consists of iwasm, application library, application manager, timers and sensors support. The device runs on Zephyr OS and interacts with host tools.
+This sample builds out both host tools running on the host side, and an application running on the device side. The device application consists of iwasm, application library, application manager and timerssupport. The device runs on Zephyr OS and interacts with host tools.
 
 It demonstrates an end to end scenario, the wasm applications life cycle management and communication programming models.
 
@@ -21,7 +21,6 @@ simple/
     ├── event_subscriber.c
     ├── request_handler.c
     ├── request_sender.c
-    ├── sensor.c
     └── timer.c
 ```
 
@@ -106,7 +105,6 @@ out/
     ├── event_subscriber.wasm
     ├── request_handler.wasm
     ├── request_sender.wasm
-    ├── sensor.wasm
     └── timer.wasm
 ```
 - host_tool:
@@ -126,8 +124,6 @@ out/
     This application shows the request/response programming model. The request handler application registers 2 resources(/url1 and /url2) by calling api_register_resource_handler() API. The request sender could be host_tool or other wasm application.
     + request_sender.wasm<br/>
     This application shows the request/response programming model. The sender application sends 2 requests, one is "/app/request_handler/url1" and the other is "url1". The former is an accurate request which explicitly specifies the name of request handler application in the middle of the URL and the later is a general request.
-    + sensor.wasm<br/>
-    This application shows the sensor programming model. It opens a test sensor and configures the sensor event generating interval to 1 second. To make the process clear to interpret, the application dumps the sensor event when receiving it.
     + timer.wasm<br/>
     This application shows the timer programming model. It creates a periodic timer that prints the current expiry number in every second.
 

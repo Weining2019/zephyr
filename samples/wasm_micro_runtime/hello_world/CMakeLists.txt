@@ -1,4 +1,5 @@
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (C) 2019 Intel Corporation.  All rights reserved.
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 cmake_minimum_required(VERSION 3.8.2)
 
@@ -35,7 +36,7 @@ if (NOT DEFINED WAMR_BUILD_LIBC_WASI)
   set (WAMR_BUILD_LIBC_WASI 0)
 endif ()
 
-set (WAMR_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../modules/lib/wasm-micro-runtime)
+set (WAMR_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../modules/lib/wasm-micro-runtime)
 
 include (${WAMR_ROOT_DIR}/build-scripts/runtime_lib.cmake)
 
