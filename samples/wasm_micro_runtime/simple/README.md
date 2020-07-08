@@ -13,7 +13,6 @@ simple/
 ├── prj.conf
 ├── README.md
 ├── src
-│   ├── ext_lib_export.c
 │   ├── iwasm_main.c
 │   └── main.c
 └── wasm-apps
@@ -32,8 +31,6 @@ simple/
   Zephy project configuration file.
 - README.md<br/>
   The file you are reading currently.
-- src/ext_lib_export.c<br/>
-  This file is used to export native APIs. See the `The mechanism of exporting Native API to WASM application` section in [WAMR](https://github.com/intel/wasm-micro-runtime) README.md for detail.
 - src/iwam_main.c<br/>
   This file is the implementation by platform integrator. It implements the interfaces that enable the application manager communicating with the host side. See `{WAMR_ROOT}/core/app-mgr/app-mgr-shared/app_manager_export.h` for the definition of the host interface.
 ```
@@ -66,31 +63,15 @@ The `host_init_func` is called when the application manager starts up. And `host
 
 Install required SDK and libraries
 ==============
-- Install EMSDK
-```
-    https://emscripten.org/docs/tools_reference/emsdk.html
-```
+ - Install WASI SDK: Download the [wasi-sdk](https://github.com/CraneStation/wasi-sdk/releases) and extract the archive to default path `/opt/wasi-sdk`
 
-Prepare STM32 board and patch Zephyr
+Prepare STM32 boar
 ==============
-Since you may install multiple wasm applications, it is recommended that RAM SIZE not less than 320KB. In our test we use nucleo_f767zi, which is not supported by Zephyr. However, nucleo_f767zi is almost the same as nucleo_f746zg, except FLASH and SRAM size. So we changed the DTS setting of nucleo_f746zg boards for a workaround. Apply below patch to Zephyr:
-```
-diff --git a/dts/arm/st/f7/stm32f746.dtsi b/dts/arm/st/f7/stm32f746.dtsi
-index 1bce3ad..401b4b1 100644
---- a/dts/arm/st/f7/stm32f746.dtsi
-+++ b/dts/arm/st/f7/stm32f746.dtsi
-@@ -11,7 +11,7 @@
- 
-        sram0: memory@20010000 {
-                compatible = "mmio-sram";
--               reg = <0x20010000 DT_SIZE_K(256)>;
-+               reg = <0x20010000 DT_SIZE_K(320)>;
-        };
-```
+Since you may install multiple wasm applications, it is recommended that RAM SIZE not less than 320KB. In our test we use nucleo_f767zi.
 
 Build all binaries
 ==============
-After patching Zephyr, execute the build.sh script then all binaries including wasm application files would be generated in 'out' directory.
+Execute the build.sh script then all binaries including wasm application files would be generated in 'out' directory.
 `./build.sh`
 
 Out directory structure
