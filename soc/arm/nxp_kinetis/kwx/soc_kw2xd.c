@@ -14,7 +14,7 @@
 #include <fsl_common.h>
 #include <fsl_clock.h>
 #include <arch/cpu.h>
-#include <cortex_m/exc.h>
+#include <arch/arm/aarch32/cortex_m/cmsis.h>
 
 #define PLLFLLSEL_MCGFLLCLK	(0)
 #define PLLFLLSEL_MCGPLLCLK	(1)
@@ -115,7 +115,7 @@ static void set_modem_clock(void)
  * @return N/A
  *
  */
-static ALWAYS_INLINE void clkInit(void)
+static ALWAYS_INLINE void clock_init(void)
 {
 	CLOCK_SetSimSafeDivs();
 
@@ -132,7 +132,7 @@ static ALWAYS_INLINE void clkInit(void)
 	CLOCK_SetSimConfig(&simConfig);
 #if CONFIG_USB_KINETIS
 	CLOCK_EnableUsbfs0Clock(kCLOCK_UsbSrcPll0,
-				DT_ARM_CORTEX_M4_0_CLOCK_FREQUENCY);
+				DT_PROP(DT_PATH(cpus, cpu_0), clock_frequency));
 #endif
 }
 
@@ -158,7 +158,7 @@ static int kw2xd_init(struct device *arg)
 	PMC->REGSC |= PMC_REGSC_ACKISO_MASK;
 
 	/* Initialize PLL/system clock to 48 MHz */
-	clkInit();
+	clock_init();
 
 	/*
 	 * install default handler that simply resets the CPU

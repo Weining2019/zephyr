@@ -44,7 +44,7 @@ void do_main(struct device *dev)
 	setup_trigger(dev);
 
 	while (1) {
-		k_sleep(1000);
+		k_sleep(K_MSEC(1000));
 	}
 }
 
@@ -65,7 +65,7 @@ static void do_main(struct device *dev)
 		ret = sensor_channel_get(dev, SENSOR_CHAN_PROX, &prox_value);
 		printk("prox is %d\n", prox_value.val1);
 
-		k_sleep(1000);
+		k_sleep(K_MSEC(1000));
 	}
 }
 
@@ -82,7 +82,7 @@ void main(void)
 		return;
 	}
 
-	printk("device is %p, name is %s\n", dev, dev->config->name);
+	printk("device is %p, name is %s\n", dev, dev->name);
 
 	do_main(dev);
 }

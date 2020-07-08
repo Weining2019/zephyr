@@ -14,13 +14,13 @@ void main(void)
 	struct device *dev;
 	struct sensor_value temperature, humidity;
 
-	dev = device_get_binding(DT_INST_0_AMS_ENS210_LABEL);
+	dev = device_get_binding(DT_LABEL(DT_INST(0, ams_ens210)));
 	if (!dev) {
 		printk("Failed to get device binding");
 		return;
 	}
 
-	printk("device is %p, name is %s\n", dev, dev->config->name);
+	printk("device is %p, name is %s\n", dev, dev->name);
 
 	while (1) {
 		sensor_sample_fetch(dev);
@@ -30,6 +30,6 @@ void main(void)
 			temperature.val1, temperature.val2,
 			humidity.val1, humidity.val2);
 
-		k_sleep(1000);
+		k_sleep(K_MSEC(1000));
 	}
 }

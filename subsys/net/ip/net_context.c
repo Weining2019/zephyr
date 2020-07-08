@@ -35,6 +35,10 @@ LOG_MODULE_REGISTER(net_ctx, CONFIG_NET_CONTEXT_LOG_LEVEL);
 #include "tcp_internal.h"
 #include "net_stats.h"
 
+#if IS_ENABLED(CONFIG_NET_TCP2)
+#include "tcp2.h"
+#endif
+
 #ifndef EPFNOSUPPORT
 /* Some old versions of newlib haven't got this defined in errno.h,
  * Just use EPROTONOSUPPORT in this case
@@ -55,7 +59,7 @@ static struct k_sem contexts_lock;
 
 #if defined(CONFIG_NET_UDP) || defined(CONFIG_NET_TCP)
 static int check_used_port(enum net_ip_protocol ip_proto,
-			   u16_t local_port,
+			   uint16_t local_port,
 			   const struct sockaddr *local_addr)
 
 {
@@ -96,10 +100,10 @@ static int check_used_port(enum net_ip_protocol ip_proto,
 	return 0;
 }
 
-static u16_t find_available_port(struct net_context *context,
+static uint16_t find_available_port(struct net_context *context,
 				    const struct sockaddr *addr)
 {
-	u16_t local_port;
+	uint16_t local_port;
 
 	do {
 		local_port = sys_rand32_get() | 0x8000;
@@ -119,7 +123,7 @@ static u16_t find_available_port(struct net_context *context,
 
 int net_context_get(sa_family_t family,
 		    enum net_sock_type type,
-		    u16_t ip_proto,
+		    uint16_t ip_proto,
 		    struct net_context **context)
 {
 	int i, ret = -ENOENT;
@@ -383,10 +387,6 @@ int net_context_put(struct net_context *context)
 
 	/* net_tcp_put() will handle decrementing refcount on stack's behalf */
 	net_tcp_put(context);
-	/* Assume it's better to have goto to immediate label than ugly
-	 * not indented #ifdef (if only they were intended!).
-	 */
-	goto unlock;
 
 unlock:
 	k_mutex_unlock(&context->lock);
@@ -436,6 +436,10 @@ static int bind_default(struct net_context *context)
 
 	if (IS_ENABLED(CONFIG_NET_SOCKETS_PACKET) && family == AF_PACKET) {
 		struct sockaddr_ll ll_addr;
+
+		if (net_sll_ptr(&context->local)->sll_addr) {
+			return 0;
+		}
 
 		ll_addr.sll_family = AF_PACKET;
 		ll_addr.sll_protocol = ETH_P_ALL;
@@ -713,8 +717,9 @@ int net_context_bind(struct net_context *context, const struct sockaddr *addr,
 		NET_DBG("Context %p binding to %d iface[%d] %p addr %s",
 			context, net_context_get_ip_proto(context),
 			ll_addr->sll_ifindex, iface,
-			net_sprint_ll_addr(net_if_get_link_addr(iface)->addr,
-					   net_if_get_link_addr(iface)->len));
+			log_strdup(net_sprint_ll_addr(
+					   net_if_get_link_addr(iface)->addr,
+					   net_if_get_link_addr(iface)->len)));
 
 		return 0;
 	}
@@ -816,9 +821,10 @@ int net_context_create_ipv4_new(struct net_context *context,
 				const struct in_addr *src,
 				const struct in_addr *dst)
 {
-	NET_ASSERT(((struct sockaddr_in_ptr *)&context->local)->sin_addr);
-
 	if (!src) {
+		NET_ASSERT(((
+			struct sockaddr_in_ptr *)&context->local)->sin_addr);
+
 		src = ((struct sockaddr_in_ptr *)&context->local)->sin_addr;
 	}
 
@@ -845,9 +851,10 @@ int net_context_create_ipv6_new(struct net_context *context,
 				const struct in6_addr *src,
 				const struct in6_addr *dst)
 {
-	NET_ASSERT(((struct sockaddr_in6_ptr *)&context->local)->sin6_addr);
-
 	if (!src) {
+		NET_ASSERT(((
+			struct sockaddr_in6_ptr *)&context->local)->sin6_addr);
+
 		src = ((struct sockaddr_in6_ptr *)&context->local)->sin6_addr;
 	}
 
@@ -868,12 +875,12 @@ int net_context_connect(struct net_context *context,
 			const struct sockaddr *addr,
 			socklen_t addrlen,
 			net_context_connect_cb_t cb,
-			s32_t timeout,
+			k_timeout_t timeout,
 			void *user_data)
 {
 	struct sockaddr *laddr = NULL;
 	struct sockaddr local_addr __unused;
-	u16_t lport, rport;
+	uint16_t lport, rport;
 	int ret;
 
 	NET_ASSERT(addr);
@@ -887,18 +894,18 @@ int net_context_connect(struct net_context *context,
 	}
 
 	if (addr->sa_family != net_context_get_family(context)) {
-		NET_ASSERT_INFO(addr->sa_family == \
-				net_context_get_family(context),
-				"Family mismatch %d should be %d",
-				addr->sa_family,
-				net_context_get_family(context));
+		NET_ASSERT(addr->sa_family == net_context_get_family(context),
+			   "Family mismatch %d should be %d",
+			   addr->sa_family,
+			   net_context_get_family(context));
 		ret = -EINVAL;
 		goto unlock;
 	}
 
 	if (IS_ENABLED(CONFIG_NET_SOCKETS_PACKET) &&
 	    addr->sa_family == AF_PACKET) {
-		return -EOPNOTSUPP;
+		ret = -EOPNOTSUPP;
+		goto unlock;
 	}
 
 	if (net_context_get_state(context) == NET_CONTEXT_LISTENING) {
@@ -1043,7 +1050,7 @@ unlock:
 
 int net_context_accept(struct net_context *context,
 		       net_tcp_accept_cb_t cb,
-		       s32_t timeout,
+		       k_timeout_t timeout,
 		       void *user_data)
 {
 	int ret = 0;
@@ -1092,10 +1099,10 @@ static int get_context_priority(struct net_context *context,
 				void *value, size_t *len)
 {
 #if defined(CONFIG_NET_CONTEXT_PRIORITY)
-	*((u8_t *)value) = context->options.priority;
+	*((uint8_t *)value) = context->options.priority;
 
 	if (len) {
-		*len = sizeof(u8_t);
+		*len = sizeof(uint8_t);
 	}
 
 	return 0;
@@ -1211,7 +1218,7 @@ static int context_setup_udp_packet(struct net_context *context,
 				    socklen_t addrlen)
 {
 	int ret = -EINVAL;
-	u16_t dst_port = 0U;
+	uint16_t dst_port = 0U;
 
 	if (IS_ENABLED(CONFIG_NET_IPV6) &&
 	    net_context_get_family(context) == AF_INET6) {
@@ -1275,7 +1282,7 @@ static void context_finalize_packet(struct net_context *context,
 }
 
 static struct net_pkt *context_alloc_pkt(struct net_context *context,
-					 size_t len, s32_t timeout)
+					 size_t len, k_timeout_t timeout)
 {
 	struct net_pkt *pkt;
 
@@ -1317,10 +1324,10 @@ static void set_pkt_txtime(struct net_pkt *pkt, const struct msghdr *msghdr)
 
 	for (cmsg = CMSG_FIRSTHDR(msghdr); cmsg != NULL;
 	     cmsg = CMSG_NXTHDR(msghdr, cmsg)) {
-		if (cmsg->cmsg_len == CMSG_LEN(sizeof(u64_t)) &&
+		if (cmsg->cmsg_len == CMSG_LEN(sizeof(uint64_t)) &&
 		    cmsg->cmsg_level == SOL_SOCKET &&
 		    cmsg->cmsg_type == SCM_TXTIME) {
-			u64_t txtime = *(u64_t *)CMSG_DATA(cmsg);
+			uint64_t txtime = *(uint64_t *)CMSG_DATA(cmsg);
 
 			net_pkt_set_txtime(pkt, txtime);
 			break;
@@ -1334,7 +1341,7 @@ static int context_sendto(struct net_context *context,
 			  const struct sockaddr *dst_addr,
 			  socklen_t addrlen,
 			  net_context_send_cb_t cb,
-			  s32_t timeout,
+			  k_timeout_t timeout,
 			  void *user_data,
 			  bool sendto)
 {
@@ -1417,6 +1424,21 @@ static int context_sendto(struct net_context *context,
 		struct sockaddr_ll *ll_addr = (struct sockaddr_ll *)dst_addr;
 		struct net_if *iface;
 
+		if (msghdr) {
+			ll_addr = msghdr->msg_name;
+			addrlen = msghdr->msg_namelen;
+
+			if (!ll_addr) {
+				ll_addr = (struct sockaddr_ll *)
+							(&context->remote);
+				addrlen = sizeof(struct sockaddr_ll);
+			}
+
+			/* For sendmsg(), the dst_addr is NULL so set it here.
+			 */
+			dst_addr = (const struct sockaddr *)ll_addr;
+		}
+
 		if (addrlen < sizeof(struct sockaddr_ll)) {
 			return -EINVAL;
 		}
@@ -1485,7 +1507,7 @@ static int context_sendto(struct net_context *context,
 	context->user_data = user_data;
 
 	if (IS_ENABLED(CONFIG_NET_CONTEXT_PRIORITY)) {
-		u8_t priority;
+		uint8_t priority;
 
 		get_context_priority(context, &priority, NULL);
 		net_pkt_set_priority(pkt, priority);
@@ -1565,6 +1587,7 @@ static int context_sendto(struct net_context *context,
 		ret = net_send_data(pkt);
 	} else if (IS_ENABLED(CONFIG_NET_TCP) &&
 		   net_context_get_ip_proto(context) == IPPROTO_TCP) {
+
 		ret = context_write_data(pkt, buf, len, msghdr);
 		if (ret < 0) {
 			goto fail;
@@ -1619,7 +1642,7 @@ int net_context_send(struct net_context *context,
 		     const void *buf,
 		     size_t len,
 		     net_context_send_cb_t cb,
-		     s32_t timeout,
+		     k_timeout_t timeout,
 		     void *user_data)
 {
 	socklen_t addrlen;
@@ -1662,7 +1685,7 @@ int net_context_sendmsg(struct net_context *context,
 			const struct msghdr *msghdr,
 			int flags,
 			net_context_send_cb_t cb,
-			s32_t timeout,
+			k_timeout_t timeout,
 			void *user_data)
 {
 	int ret;
@@ -1683,7 +1706,7 @@ int net_context_sendto(struct net_context *context,
 		       const struct sockaddr *dst_addr,
 		       socklen_t addrlen,
 		       net_context_send_cb_t cb,
-		       s32_t timeout,
+		       k_timeout_t timeout,
 		       void *user_data)
 {
 	int ret;
@@ -1744,14 +1767,14 @@ unlock:
 #if defined(CONFIG_NET_UDP)
 static int recv_udp(struct net_context *context,
 		    net_context_recv_cb_t cb,
-		    s32_t timeout,
+		    k_timeout_t timeout,
 		    void *user_data)
 {
 	struct sockaddr local_addr = {
 		.sa_family = net_context_get_family(context),
 	};
 	struct sockaddr *laddr = NULL;
-	u16_t lport = 0U;
+	uint16_t lport = 0U;
 	int ret;
 
 	ARG_UNUSED(timeout);
@@ -1843,7 +1866,7 @@ static enum net_verdict net_context_raw_packet_received(
 
 static int recv_raw(struct net_context *context,
 		    net_context_recv_cb_t cb,
-		    s32_t timeout,
+		    k_timeout_t timeout,
 		    struct sockaddr *local_addr,
 		    void *user_data)
 {
@@ -1875,7 +1898,7 @@ static int recv_raw(struct net_context *context,
 
 int net_context_recv(struct net_context *context,
 		     net_context_recv_cb_t cb,
-		     s32_t timeout,
+		     k_timeout_t timeout,
 		     void *user_data)
 {
 	int ret;
@@ -1904,7 +1927,19 @@ int net_context_recv(struct net_context *context,
 	} else {
 		if (IS_ENABLED(CONFIG_NET_SOCKETS_PACKET) &&
 		    net_context_get_family(context) == AF_PACKET) {
-			ret = recv_raw(context, cb, timeout, NULL, user_data);
+			struct sockaddr_ll addr;
+
+			addr.sll_family = AF_PACKET;
+			addr.sll_ifindex =
+				net_sll_ptr(&context->local)->sll_ifindex;
+			addr.sll_protocol =
+				net_sll_ptr(&context->local)->sll_protocol;
+			memcpy(addr.sll_addr,
+			       net_sll_ptr(&context->local)->sll_addr,
+			       sizeof(addr.sll_addr));
+
+			ret = recv_raw(context, cb, timeout,
+				       (struct sockaddr *)&addr, user_data);
 		} else if (IS_ENABLED(CONFIG_NET_SOCKETS_CAN) &&
 			   net_context_get_family(context) == AF_CAN) {
 			struct sockaddr_can local_addr = {
@@ -1931,7 +1966,7 @@ int net_context_recv(struct net_context *context,
 	}
 
 #if defined(CONFIG_NET_CONTEXT_SYNC_RECV)
-	if (timeout) {
+	if (!K_TIMEOUT_EQ(timeout, K_NO_WAIT)) {
 		int ret;
 
 		/* Make sure we have the lock, then the
@@ -1960,7 +1995,7 @@ unlock:
 }
 
 int net_context_update_recv_wnd(struct net_context *context,
-				s32_t delta)
+				int32_t delta)
 {
 	int ret;
 
@@ -1982,11 +2017,11 @@ static int set_context_priority(struct net_context *context,
 				const void *value, size_t len)
 {
 #if defined(CONFIG_NET_CONTEXT_PRIORITY)
-	if (len > sizeof(u8_t)) {
+	if (len > sizeof(uint8_t)) {
 		return -EINVAL;
 	}
 
-	context->options.priority = *((u8_t *)value);
+	context->options.priority = *((uint8_t *)value);
 
 	return 0;
 #else

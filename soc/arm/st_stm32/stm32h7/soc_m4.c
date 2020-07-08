@@ -14,7 +14,7 @@
 #include <init.h>
 #include <soc.h>
 #include <arch/cpu.h>
-#include <cortex_m/exc.h>
+#include <arch/arm/aarch32/cortex_m/cmsis.h>
 
 #if defined(CONFIG_STM32H7_BOOT_CM4_CM7)
 void stm32h7_m4_boot_stop(void)
@@ -61,7 +61,7 @@ void stm32h7_m4_boot_stop(void)
  */
 static int stm32h7_m4_init(struct device *arg)
 {
-	u32_t key;
+	uint32_t key;
 
 	key = irq_lock();
 

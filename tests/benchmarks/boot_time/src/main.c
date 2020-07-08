@@ -17,34 +17,40 @@
 
 #include <zephyr.h>
 #include <tc_util.h>
+#include <kernel_internal.h>
 
 void main(void)
 {
-	u32_t task_time_stamp;	/* timestamp at beginning of first task */
-	u32_t main_us;		/* begin of main timestamp in us */
-	u32_t task_us;		/* begin of task timestamp in us */
-	u32_t idle_us;		/* begin of idle timestamp in us */
+	uint32_t task_time_stamp;	/* timestamp at beginning of first task */
+	uint32_t main_us;		/* begin of main timestamp in us */
+	uint32_t task_us;		/* begin of task timestamp in us */
+	uint32_t idle_us;		/* begin of idle timestamp in us */
 
 	task_time_stamp = k_cycle_get_32();
 
 	/*
 	 * Go to sleep for 1 tick in order to timestamp when idle thread halts.
 	 */
-	k_sleep(1);
+	k_sleep(K_MSEC(1));
 
-	int freq = sys_clock_hw_cycles_per_sec() / 1000000;
-
-	main_us = __main_time_stamp / freq;
-	task_us = task_time_stamp / freq;
-	idle_us = __idle_time_stamp / freq;
+	main_us = (uint32_t)ceiling_fraction(USEC_PER_SEC *
+					  (uint64_t)z_timestamp_main,
+					  sys_clock_hw_cycles_per_sec());
+	task_us = (uint32_t)ceiling_fraction(USEC_PER_SEC *
+					  (uint64_t)task_time_stamp,
+					  sys_clock_hw_cycles_per_sec());
+	idle_us = (uint32_t)ceiling_fraction(USEC_PER_SEC *
+					  (uint64_t)z_timestamp_idle,
+					  sys_clock_hw_cycles_per_sec());
 
 	TC_START("Boot Time Measurement");
-	TC_PRINT("Boot Result: Clock Frequency: %d MHz\n", freq);
-	TC_PRINT("_start->main(): %u cycles, %u us\n", __main_time_stamp,
+	TC_PRINT("Boot Result: Clock Frequency: %d Hz\n",
+					  sys_clock_hw_cycles_per_sec());
+	TC_PRINT("_start->main(): %u cycles, %u us\n", z_timestamp_main,
 						       main_us);
 	TC_PRINT("_start->task  : %u cycles, %u us\n", task_time_stamp,
 						       task_us);
-	TC_PRINT("_start->idle  : %u cycles, %u us\n", __idle_time_stamp,
+	TC_PRINT("_start->idle  : %u cycles, %u us\n", z_timestamp_idle,
 						       idle_us);
 	TC_PRINT("Boot Time Measurement finished\n");
 

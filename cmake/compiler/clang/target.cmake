@@ -12,7 +12,7 @@ if(NOT DEFINED NOSYSDEF_CFLAG)
 endif()
 
 if(DEFINED TOOLCHAIN_HOME)
-  set(find_program_clang_args PATH ${TOOLCHAIN_HOME} NO_DEFAULT_PATH)
+  set(find_program_clang_args PATHS ${TOOLCHAIN_HOME} NO_DEFAULT_PATH)
 endif()
 
 find_program(CMAKE_C_COMPILER   clang   ${find_program_clang_args})
@@ -86,6 +86,7 @@ include(${ZEPHYR_BASE}/cmake/compiler/${COMPILER}/target_warnings.cmake)
 include(${ZEPHYR_BASE}/cmake/compiler/gcc/target_imacros.cmake)
 include(${ZEPHYR_BASE}/cmake/compiler/gcc/target_base.cmake)
 include(${ZEPHYR_BASE}/cmake/compiler/${COMPILER}/target_coverage.cmake)
+include(${ZEPHYR_BASE}/cmake/compiler/${COMPILER}/target_sanitizers.cmake)
 
 macro(toolchain_cc_security_fortify)
   # No op, clang doesn't understand fortify at all

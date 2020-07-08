@@ -7,7 +7,7 @@
 #include <zephyr.h>
 #include <sys/printk.h>
 #include <power/reboot.h>
-#include <arch/arm/cortex_m/cmsis.h>
+#include <arch/arm/aarch32/cortex_m/cmsis.h>
 #include <ztest.h>
 #include <tc_util.h>
 
@@ -47,7 +47,7 @@ static void nmi_test_isr(void)
  */
 void test_arm_runtime_nmi(void)
 {
-	u32_t i = 0U;
+	uint32_t i = 0U;
 
 	TC_START("nmi_test_isr");
 	/* Configure the NMI isr */
@@ -55,7 +55,7 @@ void test_arm_runtime_nmi(void)
 
 	for (i = 0U; i < 10; i++) {
 		printk("Trigger NMI in 10s: %d s\n", i);
-		k_sleep(1000);
+		k_sleep(K_MSEC(1000));
 	}
 
 	/* Trigger NMI: Should fire immediately */

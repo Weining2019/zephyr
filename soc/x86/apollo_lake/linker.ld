@@ -6,14 +6,18 @@
  */
 
 #include <autoconf.h>
-#include <generated_dts_board.h>
+#include <devicetree.h>
 
-#define PHYS_LOAD_ADDR	DT_PHYS_RAM_ADDR
-#define PHYS_RAM_ADDR	DT_PHYS_RAM_ADDR
+#define PHYS_RAM_ADDR		DT_REG_ADDR(DT_CHOSEN(zephyr_sram))
+#define PHYS_RAM_SIZE		DT_REG_SIZE(DT_CHOSEN(zephyr_sram))
+
+#define KERNEL_BASE_ADDR    (PHYS_RAM_ADDR + CONFIG_X86_KERNEL_OFFSET)
+#define KERNEL_RAM_SIZE     (PHYS_RAM_SIZE - CONFIG_X86_KERNEL_OFFSET)
+#define PHYS_LOAD_ADDR		KERNEL_BASE_ADDR
 
 MEMORY
     {
-    RAM (wx)	    : ORIGIN = DT_PHYS_RAM_ADDR, LENGTH = DT_RAM_SIZE*1K
+    RAM (wx)        : ORIGIN = KERNEL_BASE_ADDR, LENGTH = KERNEL_RAM_SIZE
 
     /*
      * It doesn't matter where this region goes as it is stripped from the
@@ -24,8 +28,8 @@ MEMORY
     IDT_LIST        : ORIGIN = 2K, LENGTH = 2K
     }
 
-#ifdef CONFIG_X86_LONGMODE
+#ifdef CONFIG_X86_64
 #include <arch/x86/intel64/linker.ld>
 #else
 #include <arch/x86/ia32/linker.ld>
-#endif /* CONFIG_X86_LONGMODE */
+#endif /* CONFIG_X86_64 */

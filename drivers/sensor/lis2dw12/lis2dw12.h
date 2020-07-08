@@ -17,6 +17,11 @@
 #include <drivers/sensor.h>
 #include "lis2dw12_reg.h"
 
+union axis3bit16_t {
+	int16_t i16bit[3];
+	uint8_t u8bit[6];
+};
+
 #if defined(CONFIG_LIS2DW12_ODR_1_6)
 	#define LIS2DW12_DEFAULT_ODR	LIS2DW12_XL_ODR_1Hz6_LP_ONLY
 #elif defined(CONFIG_LIS2DW12_ODR_12_5)
@@ -86,14 +91,15 @@ struct lis2dw12_device_config {
 	lis2dw12_mode_t pm;
 #ifdef CONFIG_LIS2DW12_TRIGGER
 	const char *int_gpio_port;
-	u8_t int_gpio_pin;
-	u8_t int_pin;
+	uint8_t int_gpio_pin;
+	uint8_t int_gpio_flags;
+	uint8_t int_pin;
 #ifdef CONFIG_LIS2DW12_PULSE
-	u8_t pulse_trigger;
-	u8_t pulse_ths[3];
-	u8_t pulse_shock;
-	u8_t pulse_ltncy;
-	u8_t pulse_quiet;
+	uint8_t pulse_trigger;
+	uint8_t pulse_ths[3];
+	uint8_t pulse_shock;
+	uint8_t pulse_ltncy;
+	uint8_t pulse_quiet;
 #endif /* CONFIG_LIS2DW12_PULSE */
 #endif /* CONFIG_LIS2DW12_TRIGGER */
 };
@@ -104,15 +110,15 @@ struct lis2dw12_data;
 /* sensor data */
 struct lis2dw12_data {
 	struct device *bus;
-	s16_t acc[3];
+	int16_t acc[3];
 
 	 /* save sensitivity */
-	u16_t gain;
+	uint16_t gain;
 
-	lis2dw12_ctx_t *ctx;
+	stmdev_ctx_t *ctx;
 #ifdef CONFIG_LIS2DW12_TRIGGER
 	struct device *gpio;
-	u8_t gpio_pin;
+	uint8_t gpio_pin;
 	struct gpio_callback gpio_cb;
 	sensor_trigger_handler_t drdy_handler;
 #ifdef CONFIG_LIS2DW12_PULSE
@@ -128,7 +134,7 @@ struct lis2dw12_data {
 	struct device *dev;
 #endif /* CONFIG_LIS2DW12_TRIGGER_GLOBAL_THREAD */
 #endif /* CONFIG_LIS2DW12_TRIGGER */
-#if defined(DT_INST_0_ST_LIS2DW12_CS_GPIOS_CONTROLLER)
+#if DT_INST_SPI_DEV_HAS_CS_GPIOS(0)
 	struct spi_cs_control cs_ctrl;
 #endif
 };

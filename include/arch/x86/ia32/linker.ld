@@ -37,9 +37,6 @@
  * order when programming the MMU.
  */
 
-#define _LINKER
-
-#define _ASMLANGUAGE
 #include <linker/linker-defs.h>
 #include <offsets.h>
 #include <sys/util.h>
@@ -88,7 +85,13 @@ SECTIONS
 	_image_text_start = PHYS_LOAD_ADDR;
 	SECTION_PROLOGUE(_TEXT_SECTION_NAME,,)
 	{
-	. = CONFIG_TEXT_SECTION_OFFSET;
+
+/* Located in generated directory. This file is populated by calling
+ * zephyr_linker_sources(ROM_START ...). This typically contains the vector
+ * table and debug information.
+ */
+#include <snippets-rom-start.ld>
+
 	*(.text_start)
 	*(".text_start.*")
 	*(.text)
@@ -121,9 +124,9 @@ SECTIONS
 
 #ifdef CONFIG_X86_MMU
 	. = ALIGN(4);
-	z_x86_mmulist_start = .;
-	KEEP(*(.mmulist))
-	z_x86_mmulist_end = .;
+	_mmu_region_list_start = .;
+	KEEP(*("._mmu_region.static.*"))
+	_mmu_region_list_end = .;
 #endif /* CONFIG_X86_MMU */
 
 #ifndef CONFIG_DYNAMIC_INTERRUPTS
@@ -148,14 +151,6 @@ SECTIONS
  * zephyr_linker_sources() Cmake function.
  */
 #include <snippets-rodata.ld>
-#ifdef CONFIG_SOC_RODATA_LD
-#include <soc-rodata.ld>
-#endif
-
-#ifdef CONFIG_CUSTOM_RODATA_LD
-/* Located in project source directory */
-#include <custom-rodata.ld>
-#endif
 
 #include <linker/kobject-rom.ld>
 	} GROUP_LINK_IN(ROMABLE_REGION)
@@ -243,9 +238,6 @@ SECTIONS
  * zephyr_linker_sources() Cmake function.
  */
 #include <snippets-noinit.ld>
-#ifdef CONFIG_SOC_NOINIT_LD
-#include <soc-noinit.ld>
-#endif
 
 	MMU_PAGE_ALIGN
 
@@ -281,14 +273,6 @@ SECTIONS
  * zephyr_linker_sources() Cmake function.
  */
 #include <snippets-rwdata.ld>
-#ifdef CONFIG_SOC_RWDATA_LD
-#include <soc-rwdata.ld>
-#endif
-
-#ifdef CONFIG_CUSTOM_RWDATA_LD
-/* Located in project source directory */
-#include <custom-rwdata.ld>
-#endif
 
 #ifdef CONFIG_X86_KPTI
 	MMU_PAGE_ALIGN
@@ -356,11 +340,11 @@ SECTIONS
 	__data_ram_end = .;
 
 	/* All unused memory also owned by the kernel for heaps */
-	__kernel_ram_end = PHYS_RAM_ADDR + KB(DT_RAM_SIZE);
+	__kernel_ram_end = KERNEL_BASE_ADDR + KERNEL_RAM_SIZE;
 	__kernel_ram_size = __kernel_ram_end - __kernel_ram_start;
 
 	_image_ram_end = .;
-	_image_ram_all = (PHYS_RAM_ADDR + KB(DT_RAM_SIZE)) - _image_ram_start;
+	_image_ram_all = (KERNEL_BASE_ADDR + KERNEL_RAM_SIZE) - _image_ram_start;
 
 	_end = .; /* end of image */
 
@@ -387,10 +371,6 @@ SECTIONS
 
 
 
-#ifdef CONFIG_CUSTOM_SECTIONS_LD
-/* Located in project source directory */
-#include <custom-sections.ld>
-#endif
 /* Located in generated directory. This file is populated by the
  * zephyr_linker_sources() Cmake function.
  */

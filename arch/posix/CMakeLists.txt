@@ -1,13 +1,18 @@
 # SPDX-License-Identifier: Apache-2.0
 
-if (CONFIG_64BIT)
-	# some gcc versions fail to build without -fPIC
-	zephyr_compile_options(-m64 -fPIC)
-	zephyr_ld_options(-m64)
-else ()
-	zephyr_compile_options(-m32)
-	zephyr_ld_options(-m32)
-endif ()
+if(EXISTS ${CMAKE_CURRENT_LIST_DIR}/${CMAKE_HOST_SYSTEM_NAME}.${CMAKE_HOST_SYSTEM_PROCESSOR}.cmake)
+  # @Intent: Set necessary compiler & linker options for this specific host architecture & OS
+  include(${CMAKE_HOST_SYSTEM_NAME}.${CMAKE_HOST_SYSTEM_PROCESSOR}.cmake)
+else()
+  if (CONFIG_64BIT)
+    # some gcc versions fail to build without -fPIC
+    zephyr_compile_options(-m64 -fPIC)
+    zephyr_link_libraries(-m64)
+  else ()
+    zephyr_compile_options(-m32)
+    zephyr_link_libraries(-m32)
+  endif ()
+endif()
 
 zephyr_compile_options(
   ${ARCH_FLAG}
@@ -24,9 +29,11 @@ if (CONFIG_COVERAGE)
 endif ()
 
 if (CONFIG_ASAN)
-	zephyr_compile_options(-fsanitize=address)
-	zephyr_link_libraries(-lasan)
-	zephyr_ld_options(-fsanitize=address)
+  toolchain_cc_asan()
+endif ()
+
+if (CONFIG_UBSAN)
+  toolchain_cc_ubsan()
 endif ()
 
 zephyr_compile_definitions(_POSIX_C_SOURCE=200809 _XOPEN_SOURCE=600 _XOPEN_SOURCE_EXTENDED)

@@ -43,7 +43,7 @@ static const char fifo_data[] = "This is a FIFO test.\r\n";
 
 static void uart_fifo_callback(struct device *dev)
 {
-	u8_t recvData;
+	uint8_t recvData;
 	static int tx_data_idx;
 
 	/* Verify uart_irq_update() */
@@ -63,7 +63,7 @@ static void uart_fifo_callback(struct device *dev)
 		 * well, we'll fail test.
 		 */
 		if (uart_fifo_fill(dev,
-				   (u8_t *)&fifo_data[tx_data_idx++], 1) > 0) {
+				   (uint8_t *)&fifo_data[tx_data_idx++], 1) > 0) {
 			data_transmitted = true;
 			char_sent++;
 		}
@@ -124,7 +124,7 @@ static int test_fifo_fill(void)
 	/* Verify uart_irq_tx_enable() */
 	uart_irq_tx_enable(uart_dev);
 
-	k_sleep(500);
+	k_sleep(K_MSEC(500));
 
 	/* Verify uart_irq_tx_disable() */
 	uart_irq_tx_disable(uart_dev);

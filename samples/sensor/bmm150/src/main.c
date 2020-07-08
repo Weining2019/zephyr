@@ -31,7 +31,7 @@ void do_main(struct device *dev)
 				sensor_value_to_double(&y),
 				sensor_value_to_double(&z));
 
-		k_sleep(500);
+		k_sleep(K_MSEC(500));
 	}
 }
 
@@ -63,7 +63,7 @@ void main(void)
 	dev = sensor_search();
 	if (dev) {
 		printk("Found device is %p, name is %s\n",
-				dev, dev->config->name);
+				dev, dev->name);
 		do_main(dev);
 	} else {
 		printk("There is no available Geomagnetic device.\n");

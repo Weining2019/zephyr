@@ -40,7 +40,12 @@
 #define LOAPIC_TIMER_CCR 0x390    /* Timer Current Count Reg */
 #define LOAPIC_TIMER_CONFIG 0x3e0 /* Timer Divide Config Reg */
 
-/* Local APIC Vector Table Bits */
+#define LOAPIC_ICR_BUSY		0x00001000	/* delivery status: 1 = busy */
+
+#define LOAPIC_ICR_IPI_OTHERS	0x000C4000U	/* normal IPI to other CPUs */
+#define LOAPIC_ICR_IPI_INIT	0x00004500U
+#define LOAPIC_ICR_IPI_STARTUP	0x00004600U
+
 #define LOAPIC_LVT_MASKED 0x00010000   /* mask */
 
 #ifndef _ASMLANGUAGE
@@ -49,6 +54,7 @@
 extern "C" {
 #endif
 
+extern void z_loapic_enable(unsigned char cpu_number);
 extern void z_loapic_int_vec_set(unsigned int irq, unsigned int vector);
 extern void z_loapic_irq_enable(unsigned int irq);
 extern void z_loapic_irq_disable(unsigned int irq);
@@ -58,7 +64,7 @@ extern void z_loapic_irq_disable(unsigned int irq);
  *
  * @param reg the LOAPIC register number to read (LOAPIC_*)
  */
-static inline u64_t x86_read_x2apic(unsigned int reg)
+static inline uint64_t x86_read_x2apic(unsigned int reg)
 {
 	reg >>= 4;
 	return z_x86_msr_read(X86_X2APIC_BASE_MSR + reg);
@@ -69,7 +75,7 @@ static inline u64_t x86_read_x2apic(unsigned int reg)
  *
  * @param reg the LOAPIC register number to read (LOAPIC_*)
  */
-static inline u32_t x86_read_xapic(unsigned int reg)
+static inline uint32_t x86_read_xapic(unsigned int reg)
 {
 	return sys_read32(CONFIG_LOAPIC_BASE_ADDRESS + reg);
 }
@@ -84,7 +90,7 @@ static inline u32_t x86_read_xapic(unsigned int reg)
  *
  * @param reg the LOAPIC register number to read (LOAPIC_*)
  */
-static inline u32_t x86_read_loapic(unsigned int reg)
+static inline uint32_t x86_read_loapic(unsigned int reg)
 {
 #ifdef CONFIG_X2APIC
 	return x86_read_x2apic(reg);
@@ -99,7 +105,7 @@ static inline u32_t x86_read_loapic(unsigned int reg)
  * @param reg the LOAPIC register number to write (one of LOAPIC_*)
  * @param val 64-bit value to write
  */
-static inline void x86_write_x2apic(unsigned int reg, u64_t val)
+static inline void x86_write_x2apic(unsigned int reg, uint64_t val)
 {
 	reg >>= 4;
 	z_x86_msr_write(X86_X2APIC_BASE_MSR + reg, val);
@@ -111,7 +117,7 @@ static inline void x86_write_x2apic(unsigned int reg, u64_t val)
  * @param reg the LOAPIC register number to write (one of LOAPIC_*)
  * @param val 32-bit value to write
  */
-static inline void x86_write_xapic(unsigned int reg, u32_t val)
+static inline void x86_write_xapic(unsigned int reg, uint32_t val)
 {
 	sys_write32(val, CONFIG_LOAPIC_BASE_ADDRESS + reg);
 }
@@ -127,12 +133,42 @@ static inline void x86_write_xapic(unsigned int reg, u32_t val)
  * @param reg the LOAPIC register number to write (one of LOAPIC_*)
  * @param val 32-bit value to write
  */
-static inline void x86_write_loapic(unsigned int reg, u32_t val)
+static inline void x86_write_loapic(unsigned int reg, uint32_t val)
 {
 #ifdef CONFIG_X2APIC
 	x86_write_x2apic(reg, val);
 #else
 	x86_write_xapic(reg, val);
+#endif
+}
+
+/**
+ * @brief Send an IPI.
+ *
+ * @param apic_id If applicable, the target CPU APIC ID (0 otherwise).
+ * @param ipi Type of IPI: one of the LOAPIC_ICR_IPI_* constants.
+ * @param vector If applicable, the target vector (0 otherwise).
+ */
+static inline void z_loapic_ipi(uint8_t apic_id, uint32_t ipi, uint8_t vector)
+{
+	ipi |= vector;
+
+#ifndef CONFIG_X2APIC
+	/*
+	 * Legacy xAPIC mode: first wait for any previous IPI to be delivered.
+	 */
+
+	while (x86_read_xapic(LOAPIC_ICRLO) & LOAPIC_ICR_BUSY) {
+	}
+
+	x86_write_xapic(LOAPIC_ICRHI, apic_id << 24);
+	x86_write_xapic(LOAPIC_ICRLO, ipi);
+#else
+	/*
+	 * x2APIC mode is greatly simplified: one write, no delivery status.
+	 */
+
+	x86_write_x2apic(LOAPIC_ICRLO, (((uint64_t) apic_id) << 32) | ipi);
 #endif
 }
 

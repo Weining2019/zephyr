@@ -19,7 +19,7 @@ LOG_MODULE_DECLARE(net_l2_ppp, CONFIG_NET_L2_PPP_LOG_LEVEL);
 #define BUF_ALLOC_TIMEOUT K_MSEC(100)
 
 /* This timeout is in milliseconds */
-#define FSM_TIMEOUT CONFIG_NET_L2_PPP_TIMEOUT
+#define FSM_TIMEOUT K_MSEC(CONFIG_NET_L2_PPP_TIMEOUT)
 
 #define MAX_NACK_LOOPS CONFIG_NET_L2_PPP_MAX_NACK_LOOPS
 
@@ -118,8 +118,7 @@ static void ppp_fsm_timeout(struct k_work *work)
 
 			fsm->retransmits--;
 
-			(void)k_delayed_work_submit(&fsm->timer,
-						    FSM_TIMEOUT);
+			(void)k_delayed_work_submit(&fsm->timer, FSM_TIMEOUT);
 		}
 
 		break;
@@ -144,7 +143,7 @@ static void ppp_pkt_send(struct k_work *work)
 }
 
 
-void ppp_fsm_init(struct ppp_fsm *fsm, u16_t protocol)
+void ppp_fsm_init(struct ppp_fsm *fsm, uint16_t protocol)
 {
 	fsm->protocol = protocol;
 	fsm->state = PPP_INITIAL;
@@ -186,7 +185,7 @@ static void terminate(struct ppp_fsm *fsm, enum ppp_state next_state)
 	ppp_change_state(fsm, next_state);
 }
 
-void ppp_fsm_close(struct ppp_fsm *fsm, const u8_t *reason)
+void ppp_fsm_close(struct ppp_fsm *fsm, const uint8_t *reason)
 {
 	NET_DBG("[%s/%p] Current state %s (%d)", fsm->name, fsm,
 		ppp_state_str(fsm->state), fsm->state);
@@ -343,14 +342,14 @@ void ppp_fsm_open(struct ppp_fsm *fsm)
 }
 
 int ppp_send_pkt(struct ppp_fsm *fsm, struct net_if *iface,
-		 enum ppp_packet_type type, u8_t id,
-		 void *data, u32_t data_len)
+		 enum ppp_packet_type type, uint8_t id,
+		 void *data, uint32_t data_len)
 {
 	/* Note that the data parameter is the received PPP packet if
 	 * we want to send PROTOCOL or CODE reject packet.
 	 */
 	struct net_pkt *req_pkt = data;
-	u16_t protocol = 0;
+	uint16_t protocol = 0;
 	size_t len = 0;
 	struct ppp_packet ppp;
 	struct net_pkt *pkt;
@@ -359,14 +358,14 @@ int ppp_send_pkt(struct ppp_fsm *fsm, struct net_if *iface,
 	if (!iface) {
 		struct ppp_context *ctx;
 
-		if (fsm->protocol == PPP_LCP) {
+		if (fsm && fsm->protocol == PPP_LCP) {
 			ctx = CONTAINER_OF(fsm, struct ppp_context, lcp.fsm);
 #if defined(CONFIG_NET_IPV4)
-		} else if (fsm->protocol == PPP_IPCP) {
+		} else if (fsm && fsm->protocol == PPP_IPCP) {
 			ctx = CONTAINER_OF(fsm, struct ppp_context, ipcp.fsm);
 #endif
 #if defined(CONFIG_NET_IPV6)
-		} else if (fsm->protocol == PPP_IPV6CP) {
+		} else if (fsm && fsm->protocol == PPP_IPV6CP) {
 			ctx = CONTAINER_OF(fsm, struct ppp_context,
 					   ipv6cp.fsm);
 #endif
@@ -396,24 +395,24 @@ int ppp_send_pkt(struct ppp_fsm *fsm, struct net_if *iface,
 		/* 2 + 1 + 1 (configure-[req|ack|nack|rej]) +
 		 * data_len (options)
 		 */
-		len = sizeof(u16_t) + sizeof(u8_t) + sizeof(u8_t) + data_len;
+		len = sizeof(ppp) + data_len;
 		break;
 
 	case PPP_DISCARD_REQ:
 		break;
 
 	case PPP_ECHO_REQ:
-		len = sizeof(u16_t) + sizeof(u8_t) + sizeof(u8_t) +
-			sizeof(u32_t) + data_len;
+		len = sizeof(ppp) + sizeof(uint32_t) + data_len;
 		break;
 
 	case PPP_ECHO_REPLY:
+		len = sizeof(ppp) + net_pkt_remaining_data(req_pkt);
 		break;
 
 	case PPP_PROTOCOL_REJ:
-		len = sizeof(u8_t) + sizeof(u8_t) + sizeof(u16_t) +
-			sizeof(u16_t) + net_pkt_remaining_data(req_pkt);
-		protocol = data_len;
+		len = sizeof(ppp) + sizeof(uint16_t) +
+			net_pkt_remaining_data(req_pkt);
+		protocol = PPP_LCP;
 		break;
 
 	case PPP_TERMINATE_REQ:
@@ -433,7 +432,7 @@ int ppp_send_pkt(struct ppp_fsm *fsm, struct net_if *iface,
 	ppp.length = htons(len);
 
 	pkt = net_pkt_alloc_with_buffer(iface,
-					sizeof(u16_t) + len,
+					sizeof(uint16_t) + len,
 					AF_UNSPEC, 0, BUF_ALLOC_TIMEOUT);
 	if (!pkt) {
 		goto out_of_mem;
@@ -471,7 +470,7 @@ int ppp_send_pkt(struct ppp_fsm *fsm, struct net_if *iface,
 
 		data_len = MIN(data_len, PPP_MRU);
 		if (data_len > 0) {
-			if (data_len == sizeof(u32_t)) {
+			if (data_len == sizeof(uint32_t)) {
 				ret = net_pkt_write_be32(pkt,
 						       POINTER_TO_UINT(data));
 			} else {
@@ -482,7 +481,8 @@ int ppp_send_pkt(struct ppp_fsm *fsm, struct net_if *iface,
 				goto out_of_mem;
 			}
 		}
-
+	} else if (type == PPP_ECHO_REPLY) {
+		net_pkt_copy(pkt, req_pkt, len);
 	} else if (type == PPP_CONFIGURE_ACK || type == PPP_CONFIGURE_REQ ||
 		   type == PPP_CONFIGURE_REJ || type == PPP_CONFIGURE_NACK) {
 		/* add options */
@@ -499,9 +499,9 @@ int ppp_send_pkt(struct ppp_fsm *fsm, struct net_if *iface,
 		fsm ? fsm->name : "?", fsm, net_pkt_get_len(pkt), pkt,
 		data_len);
 
-	if (fsm) {
-		net_pkt_set_ppp(pkt, true);
+	net_pkt_set_ppp(pkt, true);
 
+	if (fsm) {
 		/* Do not call net_send_data() directly in order to make this
 		 * thread run before the sending happens. If we call the
 		 * net_send_data() from this thread, then in fast link (like
@@ -516,7 +516,7 @@ int ppp_send_pkt(struct ppp_fsm *fsm, struct net_if *iface,
 		 * in that case.
 		 */
 		(void)k_delayed_work_submit(&fsm->sender.work,
-				IS_ENABLED(CONFIG_NET_TEST) ? K_MSEC(1) : 0);
+			  IS_ENABLED(CONFIG_NET_TEST) ? K_MSEC(1) : K_NO_WAIT);
 	} else {
 		ret = net_send_data(pkt);
 		if (ret < 0) {
@@ -535,9 +535,9 @@ out_of_mem:
 }
 
 static enum net_verdict fsm_recv_configure_req(struct ppp_fsm *fsm,
-					       u8_t id,
+					       uint8_t id,
 					       struct net_pkt *pkt,
-					       u16_t remaining_len)
+					       uint16_t remaining_len)
 {
 	struct net_buf *buf = NULL;
 	int len = 0;
@@ -642,9 +642,9 @@ static enum net_verdict fsm_recv_configure_req(struct ppp_fsm *fsm,
 	return NET_OK;
 }
 
-static enum net_verdict fsm_recv_configure_ack(struct ppp_fsm *fsm, u8_t id,
+static enum net_verdict fsm_recv_configure_ack(struct ppp_fsm *fsm, uint8_t id,
 					       struct net_pkt *pkt,
-					       u16_t remaining_len)
+					       uint16_t remaining_len)
 {
 	NET_DBG("[%s/%p] Current state %s (%d)", fsm->name, fsm,
 		ppp_state_str(fsm->state), fsm->state);
@@ -713,9 +713,9 @@ static enum net_verdict fsm_recv_configure_ack(struct ppp_fsm *fsm, u8_t id,
 
 static enum net_verdict fsm_recv_configure_nack_rej(struct ppp_fsm *fsm,
 						    enum ppp_packet_type code,
-						    u8_t id,
+						    uint8_t id,
 						    struct net_pkt *pkt,
-						    u16_t length)
+						    uint16_t length)
 {
 	bool ret = false;
 
@@ -814,9 +814,9 @@ static enum net_verdict fsm_recv_configure_nack_rej(struct ppp_fsm *fsm,
 	return NET_OK;
 }
 
-static enum net_verdict fsm_recv_terminate_req(struct ppp_fsm *fsm, u8_t id,
+static enum net_verdict fsm_recv_terminate_req(struct ppp_fsm *fsm, uint8_t id,
 					       struct net_pkt *pkt,
-					       u16_t length)
+					       uint16_t length)
 {
 	NET_DBG("[%s/%p] Current state %s (%d)", fsm->name, fsm,
 		ppp_state_str(fsm->state), fsm->state);
@@ -863,9 +863,9 @@ static enum net_verdict fsm_recv_terminate_req(struct ppp_fsm *fsm, u8_t id,
 	return NET_OK;
 }
 
-static enum net_verdict fsm_recv_terminate_ack(struct ppp_fsm *fsm, u8_t id,
+static enum net_verdict fsm_recv_terminate_ack(struct ppp_fsm *fsm, uint8_t id,
 					       struct net_pkt *pkt,
-					       u16_t length)
+					       uint16_t length)
 {
 	enum ppp_state new_state;
 
@@ -916,7 +916,7 @@ stopped:
 static enum net_verdict fsm_recv_code_rej(struct ppp_fsm *fsm,
 					  struct net_pkt *pkt)
 {
-	u8_t code, id;
+	uint8_t code, id;
 	int ret;
 
 	NET_DBG("[%s/%p] Current state %s (%d)", fsm->name, fsm,
@@ -996,11 +996,11 @@ void ppp_fsm_proto_reject(struct ppp_fsm *fsm)
 	}
 }
 
-enum net_verdict ppp_fsm_input(struct ppp_fsm *fsm, u16_t proto,
+enum net_verdict ppp_fsm_input(struct ppp_fsm *fsm, uint16_t proto,
 			       struct net_pkt *pkt)
 {
-	u8_t code, id;
-	u16_t length;
+	uint8_t code, id;
+	uint16_t length;
 	int ret;
 
 	ret = net_pkt_read_u8(pkt, &code);
@@ -1083,7 +1083,7 @@ enum net_verdict ppp_fsm_input(struct ppp_fsm *fsm, u16_t proto,
 }
 
 enum net_verdict ppp_fsm_recv_protocol_rej(struct ppp_fsm *fsm,
-					   u8_t id,
+					   uint8_t id,
 					   struct net_pkt *pkt)
 {
 	NET_DBG("[%s/%p] Current state %s (%d)", fsm->name, fsm,
@@ -1093,17 +1093,20 @@ enum net_verdict ppp_fsm_recv_protocol_rej(struct ppp_fsm *fsm,
 }
 
 enum net_verdict ppp_fsm_recv_echo_req(struct ppp_fsm *fsm,
-				       u8_t id,
+				       uint8_t id,
 				       struct net_pkt *pkt)
 {
 	NET_DBG("[%s/%p] Current state %s (%d)", fsm->name, fsm,
 		ppp_state_str(fsm->state), fsm->state);
 
-	return NET_DROP;
+	(void)ppp_send_pkt(fsm, net_pkt_iface(pkt), PPP_ECHO_REPLY,
+		id, pkt, 0);
+
+	return NET_OK;
 }
 
 enum net_verdict ppp_fsm_recv_echo_reply(struct ppp_fsm *fsm,
-					 u8_t id,
+					 uint8_t id,
 					 struct net_pkt *pkt)
 {
 	NET_DBG("[%s/%p] Current state %s (%d)", fsm->name, fsm,
@@ -1122,21 +1125,19 @@ enum net_verdict ppp_fsm_recv_echo_reply(struct ppp_fsm *fsm,
 }
 
 enum net_verdict ppp_fsm_recv_discard_req(struct ppp_fsm *fsm,
-					  u8_t id,
+					  uint8_t id,
 					  struct net_pkt *pkt)
 {
 	NET_DBG("[%s/%p] Current state %s (%d)", fsm->name, fsm,
 		ppp_state_str(fsm->state), fsm->state);
 
-	net_pkt_unref(pkt);
-
 	return NET_OK;
 }
 
 void ppp_send_proto_rej(struct net_if *iface, struct net_pkt *pkt,
-			u16_t protocol)
+			uint16_t protocol)
 {
-	u8_t code, id;
+	uint8_t code, id;
 	int ret;
 
 	ret = net_pkt_read_u8(pkt, &code);
@@ -1149,7 +1150,7 @@ void ppp_send_proto_rej(struct net_if *iface, struct net_pkt *pkt,
 		goto quit;
 	}
 
-	(void)ppp_send_pkt(NULL, iface, PPP_PROTOCOL_REJ, id, pkt, protocol);
+	(void)ppp_send_pkt(NULL, iface, PPP_PROTOCOL_REJ, id, pkt, 0);
 
 quit:
 	return;

@@ -132,8 +132,8 @@ extern "C" {
  */
 struct spi_cs_control {
 	struct device	*gpio_dev;
-	u32_t		gpio_pin;
-	u32_t		delay;
+	uint32_t		gpio_pin;
+	uint32_t		delay;
 };
 
 /**
@@ -158,9 +158,9 @@ struct spi_cs_control {
  * transceive call. Rest of the attributes are not meant to be tweaked.
  */
 struct spi_config {
-	u32_t		frequency;
-	u16_t		operation;
-	u16_t		slave;
+	uint32_t		frequency;
+	uint16_t		operation;
+	uint16_t		slave;
 
 	const struct spi_cs_control *cs;
 };
@@ -223,7 +223,7 @@ typedef int (*spi_api_release)(struct device *dev,
  * @brief SPI driver API
  * This is the mandatory API any SPI driver needs to expose.
  */
-struct spi_driver_api {
+__subsystem struct spi_driver_api {
 	spi_api_io transceive;
 #ifdef CONFIG_SPI_ASYNC
 	spi_api_io_async transceive_async;

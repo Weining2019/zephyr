@@ -26,7 +26,7 @@
 	GTEXT(z_x86_prep_c)
 
 	GDATA(_idt_base_address)
-	GDATA(_interrupt_stack)
+	GDATA(z_interrupt_stacks)
 	GDATA(z_x86_idt)
 #ifndef CONFIG_GDT_DYNAMIC
 	GDATA(_gdt)
@@ -43,37 +43,7 @@
 
 SECTION_FUNC(TEXT_START, __start)
 
-#ifdef CONFIG_X86_MULTIBOOT_INFO
-	/*
-	 * If we were loaded by a multiboot-compliant loader, then EAX
-	 * contains X86_MULTIBOOT_EAX_MAGIC and EBX points to a 'struct
-	 * x86_multiboot_info' somewhere in memory that the kernel load
-	 * image doesn't claim. Since the kernel will consider such memory
-	 * "free", we must copy the contents of the struct before the kernel
-	 * decides to use that RAM for something else. However, we can't
-	 * effect the copy until after the BSS is initialized.
-	 *
-	 * EBX isn't touched until the copy is made; even function calls will
-	 * preserve it (it's callee-save in the SysV ABI). But EAX will be
-	 * clobbered, so we check for the magic now and leave a sentinel in
-	 * EBX (0) if the multiboot data isn't valid.
-	 */
-
-	cmpl $X86_MULTIBOOT_EAX_MAGIC, %eax
-	je 1f
-	xorl %ebx, %ebx
-1:
-#endif
-
-#ifdef CONFIG_BOOT_TIME_MEASUREMENT
-	/*
-	 * Reset the TSC to 0, since that's the datum for boot metrics.
-	 */
-	xorl	%eax, %eax
-	xorl	%edx, %edx
-	movl	$X86_TIME_STAMP_COUNTER_MSR, %ecx
-	wrmsr
-#endif
+#include "../common.S"
 
 	/* Enable write-back caching by clearing the NW and CD bits */
 	movl	%cr0, %eax
@@ -115,7 +85,7 @@ __csSet:
 #endif /* CONFIG_SET_GDT */
 
 
-#if !defined(CONFIG_FLOAT)
+#if !defined(CONFIG_FPU)
 	/*
 	 * Force an #NM exception for floating point instructions
 	 * since FP support hasn't been configured
@@ -156,7 +126,7 @@ __csSet:
 
   #endif /* CONFIG_SSE */
 
-#endif /* !CONFIG_FLOAT */
+#endif /* !CONFIG_FPU */
 
 	/*
 	 * Set the stack pointer to the area used for the interrupt stack.
@@ -165,8 +135,8 @@ __csSet:
 	 * dual-purposing of this area of memory is safe since
 	 * interrupts are disabled until the first context switch.
 	 *
-	 * kernel/init.c enforces that the _interrupt_stack pointer and
-	 * the ISR stack size are some multiple of STACK_ALIGN, which
+	 * kernel/init.c enforces that the z_interrupt_stacks pointer and
+	 * the ISR stack size are some multiple of ARCH_STACK_PTR_ALIGN, which
 	 * is at least 4.
 	 *
 	 * This is also used to call the _sys_resume_from_deep_sleep()
@@ -180,7 +150,7 @@ __csSet:
 	 */
 #ifdef CONFIG_INIT_STACKS
 	movl $0xAAAAAAAA, %eax
-	leal _interrupt_stack, %edi
+	leal z_interrupt_stacks, %edi
 #ifdef CONFIG_X86_STACK_PROTECTION
 	addl $4096, %edi
 #endif
@@ -189,7 +159,7 @@ __csSet:
 	rep  stosl
 #endif
 
-	movl	$_interrupt_stack, %esp
+	movl	$z_interrupt_stacks, %esp
 #ifdef CONFIG_X86_STACK_PROTECTION
 	/* In this configuration, all stacks, including IRQ stack, are declared
 	 * with a 4K non-present guard page preceding the stack buffer
@@ -265,36 +235,15 @@ __csSet:
 #endif
 	lidt	z_x86_idt		/* load 32-bit operand size IDT */
 
-#if defined(CONFIG_X86_MULTIBOOT_INFO)
-	/*
-	 * If EBX isn't 0, then it points to a valid boot information
-	 * struct. Copy it to x86_multiboot_info before it's overwritten.
-	 */
-
-	testl	%ebx, %ebx
-	jz	1f
-	movl	$__X86_MULTIBOOT_INFO_SIZEOF, %ecx
-	movl	%ebx, %esi
-	movl	$x86_multiboot_info, %edi
-	cld	/* to be safe. should still be 0 from BSS clear, though */
-	rep
-	movsb
-1:
+#ifdef CONFIG_LOAPIC
+	/* For BSP, cpu_number is 0 */
+	xorl	%eax, %eax
+	pushl	%eax
+	call	z_loapic_enable
 #endif
 
-#if defined(CONFIG_PIC_DISABLE)
-	/*
-	 * "Disable" legacy i8259 interrupt controllers. Note that we
-	 * can't actually disable them, but we mask all their interrupt
-	 * sources which is effectively the same thing (almost).
-	 */
-	movb $0xff, %al		/* all bits set = mask all interrupts */
-	outb %al, $0x21		/* set i8259 master mask (IRQs 0-7) */
-	outb %al, $0xA1		/* set i8259 slave mask (IRQs 8-15) */
-#endif
-
-	/* call C portion of kernel initialization and never return */
-	call	z_x86_prep_c
+	pushl	%ebx		/* pointer to multiboot info, or NULL */
+	call	z_x86_prep_c	/* enter kernel; never returns */
 
 _x86_bss_zero:
 	/* ECX = size, EDI = starting address */
@@ -362,7 +311,7 @@ dataWords:
 #ifdef CONFIG_X86_MMU
 z_x86_enable_paging:
 	/* load the page directory address into the registers*/
-	movl $z_x86_kernel_pdpt, %eax
+	movl $z_x86_kernel_ptables, %eax
 	movl %eax, %cr3
 
 	/* Enable PAE */
@@ -406,29 +355,6 @@ z_x86_idt:
 
 	.long	_idt_base_address		/* physical start address */
 
-
-#ifdef CONFIG_X86_MULTIBOOT
-	/*
-	 * The multiboot header must be in the first 8 Kb of the kernel image
-	 * (not including the ELF section header(s)) and be aligned on a
-	 * 4 byte boundary. See include/arch/x86/multiboot.h for more info.
-	 */
-
-	.balign 4,0x90
-
-	.long	X86_MULTIBOOT_HEADER_MAGIC
-	.long	X86_MULTIBOOT_HEADER_FLAGS
-	.long	-(X86_MULTIBOOT_HEADER_MAGIC + X86_MULTIBOOT_HEADER_FLAGS)
-
-#ifdef CONFIG_X86_MULTIBOOT_FRAMEBUF
-	.fill	5,4,0				/* (unused exec layout) */
-	.long	0				/* linear graphics mode */
-	.long	CONFIG_X86_MULTIBOOT_FRAMEBUF_X	/* width */
-	.long	CONFIG_X86_MULTIBOOT_FRAMEBUF_Y	/* height */
-	.long	32				/* depth */
-#endif /* CONFIG_X86_MULTIBOOT_FRAMEBUF */
-
-#endif /* CONFIG_X86_MULTIBOOT */
 
 #ifdef CONFIG_SET_GDT
 

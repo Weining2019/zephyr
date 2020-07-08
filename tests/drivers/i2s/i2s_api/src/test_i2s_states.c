@@ -329,8 +329,6 @@ void test_i2s_state_stopping_neg(void)
 	zassert_equal(ret, TC_PASS, NULL);
 }
 
-#define TEST_I2S_STATE_ERROR_NEG_PAUSE_LENGTH_US  200
-
 /** @brief Verify all failure cases in ERROR state.
  *
  * - Sending START, STOP, DRAIN trigger in ERROR state returns failure.
@@ -363,7 +361,7 @@ void test_i2s_state_error_neg(void)
 	}
 
 	/* Wait for transmission to finish */
-	k_sleep(TEST_I2S_STATE_ERROR_NEG_PAUSE_LENGTH_US);
+	k_sleep(K_MSEC(200));
 
 	/* Read all available data blocks in RX queue */
 	for (int i = 0; i < NUM_RX_BLOCKS; i++) {
@@ -417,5 +415,5 @@ void test_i2s_state_error_neg(void)
 	ret = rx_block_read(dev_i2s, 0);
 	zassert_equal(ret, TC_PASS, NULL);
 
-	k_sleep(200);
+	k_sleep(K_MSEC(200));
 }

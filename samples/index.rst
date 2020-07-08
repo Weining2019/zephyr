@@ -22,7 +22,11 @@ Samples and Demos
    display/*
    shields/*
    portability/*
-   gui/*
+   posix/*
+   video/*
+   scheduler/*
+   smp/*
+   tfm_integration/tfm_integration.rst
 
 .. comment
    To add a new sample document, please use the template available under

@@ -19,11 +19,11 @@
 #include <device.h>
 #include <init.h>
 #include <soc.h>
-#include <uart.h>
+#include <drivers/uart.h>
 #include <fsl_common.h>
 #include <fsl_clock.h>
 #include <arch/cpu.h>
-#include <cortex_m/exc.h>
+#include <arch/arm/aarch32/cortex_m/cmsis.h>
 
 #define PLLFLLSEL_MCGFLLCLK	(0)
 #define PLLFLLSEL_MCGPLLCLK	(1)
@@ -86,7 +86,7 @@ static const sim_clock_config_t simConfig = {
  * @return N/A
  *
  */
-static ALWAYS_INLINE void clkInit(void)
+static ALWAYS_INLINE void clock_init(void)
 {
 	CLOCK_SetSimSafeDivs();
 
@@ -127,7 +127,7 @@ static int fsl_frdm_k22f_init(struct device *arg)
 	unsigned int oldLevel; /* old interrupt lock level */
 #if !defined(CONFIG_ARM_MPU)
 #if defined(SYSMPU)
-	u32_t temp_reg;
+	uint32_t temp_reg;
 #endif
 #endif /* !CONFIG_ARM_MPU */
 
@@ -153,7 +153,7 @@ static int fsl_frdm_k22f_init(struct device *arg)
 #endif /* !CONFIG_ARM_MPU */
 
 	/* Initialize PLL/system clock to 120 MHz */
-	clkInit();
+	clock_init();
 
 	/*
 	 * install default handler that simply resets the CPU

@@ -21,7 +21,7 @@ void main(void)
 	}
 
 	printf("temp device is %p, name is %s\n",
-	       temp_dev, temp_dev->config->name);
+	       temp_dev, temp_dev->name);
 
 	while (1) {
 		int r;
@@ -43,6 +43,6 @@ void main(void)
 		printf("Temperature is %gC\n",
 		       sensor_value_to_double(&temp_value));
 
-		k_sleep(1000);
+		k_sleep(K_MSEC(1000));
 	}
 }

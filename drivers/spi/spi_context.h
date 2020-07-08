@@ -40,9 +40,9 @@ struct spi_context {
 	const struct spi_buf *current_rx;
 	size_t rx_count;
 
-	const u8_t *tx_buf;
+	const uint8_t *tx_buf;
 	size_t tx_len;
-	u8_t *rx_buf;
+	uint8_t *rx_buf;
 	size_t rx_len;
 
 #ifdef CONFIG_SPI_SLAVE
@@ -169,10 +169,10 @@ static inline void spi_context_cs_configure(struct spi_context *ctx)
 {
 	if (ctx->config->cs && ctx->config->cs->gpio_dev) {
 		gpio_pin_configure(ctx->config->cs->gpio_dev,
-				   ctx->config->cs->gpio_pin, GPIO_DIR_OUT);
-		gpio_pin_write(ctx->config->cs->gpio_dev,
-			       ctx->config->cs->gpio_pin,
-			       spi_context_cs_inactive_value(ctx));
+				   ctx->config->cs->gpio_pin, GPIO_OUTPUT);
+		gpio_pin_set(ctx->config->cs->gpio_dev,
+			     ctx->config->cs->gpio_pin,
+			     spi_context_cs_inactive_value(ctx));
 	} else {
 		LOG_INF("CS control inhibited (no GPIO device)");
 	}
@@ -183,9 +183,9 @@ static inline void _spi_context_cs_control(struct spi_context *ctx,
 {
 	if (ctx->config && ctx->config->cs && ctx->config->cs->gpio_dev) {
 		if (on) {
-			gpio_pin_write(ctx->config->cs->gpio_dev,
-				       ctx->config->cs->gpio_pin,
-				       spi_context_cs_active_value(ctx));
+			gpio_pin_set(ctx->config->cs->gpio_dev,
+				     ctx->config->cs->gpio_pin,
+				     spi_context_cs_active_value(ctx));
 			k_busy_wait(ctx->config->cs->delay);
 		} else {
 			if (!force_off &&
@@ -194,9 +194,9 @@ static inline void _spi_context_cs_control(struct spi_context *ctx,
 			}
 
 			k_busy_wait(ctx->config->cs->delay);
-			gpio_pin_write(ctx->config->cs->gpio_dev,
-				       ctx->config->cs->gpio_pin,
-				       spi_context_cs_inactive_value(ctx));
+			gpio_pin_set(ctx->config->cs->gpio_dev,
+				     ctx->config->cs->gpio_pin,
+				     spi_context_cs_inactive_value(ctx));
 		}
 	}
 }
@@ -220,14 +220,14 @@ static inline
 void spi_context_buffers_setup(struct spi_context *ctx,
 			       const struct spi_buf_set *tx_bufs,
 			       const struct spi_buf_set *rx_bufs,
-			       u8_t dfs)
+			       uint8_t dfs)
 {
 	LOG_DBG("tx_bufs %p - rx_bufs %p - %u", tx_bufs, rx_bufs, dfs);
 
 	if (tx_bufs) {
 		ctx->current_tx = tx_bufs->buffers;
 		ctx->tx_count = tx_bufs->count;
-		ctx->tx_buf = (const u8_t *)ctx->current_tx->buf;
+		ctx->tx_buf = (const uint8_t *)ctx->current_tx->buf;
 		ctx->tx_len = ctx->current_tx->len / dfs;
 	} else {
 		ctx->current_tx = NULL;
@@ -239,7 +239,7 @@ void spi_context_buffers_setup(struct spi_context *ctx,
 	if (rx_bufs) {
 		ctx->current_rx = rx_bufs->buffers;
 		ctx->rx_count = rx_bufs->count;
-		ctx->rx_buf = (u8_t *)ctx->current_rx->buf;
+		ctx->rx_buf = (uint8_t *)ctx->current_rx->buf;
 		ctx->rx_len = ctx->current_rx->len / dfs;
 	} else {
 		ctx->current_rx = NULL;
@@ -262,7 +262,7 @@ void spi_context_buffers_setup(struct spi_context *ctx,
 }
 
 static ALWAYS_INLINE
-void spi_context_update_tx(struct spi_context *ctx, u8_t dfs, u32_t len)
+void spi_context_update_tx(struct spi_context *ctx, uint8_t dfs, uint32_t len)
 {
 	if (!ctx->tx_len) {
 		return;
@@ -278,7 +278,7 @@ void spi_context_update_tx(struct spi_context *ctx, u8_t dfs, u32_t len)
 		ctx->tx_count--;
 		if (ctx->tx_count) {
 			ctx->current_tx++;
-			ctx->tx_buf = (const u8_t *)ctx->current_tx->buf;
+			ctx->tx_buf = (const uint8_t *)ctx->current_tx->buf;
 			ctx->tx_len = ctx->current_tx->len / dfs;
 		} else {
 			ctx->tx_buf = NULL;
@@ -303,7 +303,7 @@ bool spi_context_tx_buf_on(struct spi_context *ctx)
 }
 
 static ALWAYS_INLINE
-void spi_context_update_rx(struct spi_context *ctx, u8_t dfs, u32_t len)
+void spi_context_update_rx(struct spi_context *ctx, uint8_t dfs, uint32_t len)
 {
 #ifdef CONFIG_SPI_SLAVE
 	if (spi_context_is_slave(ctx)) {
@@ -326,7 +326,7 @@ void spi_context_update_rx(struct spi_context *ctx, u8_t dfs, u32_t len)
 		ctx->rx_count--;
 		if (ctx->rx_count) {
 			ctx->current_rx++;
-			ctx->rx_buf = (u8_t *)ctx->current_rx->buf;
+			ctx->rx_buf = (uint8_t *)ctx->current_rx->buf;
 			ctx->rx_len = ctx->current_rx->len / dfs;
 		} else {
 			ctx->rx_buf = NULL;

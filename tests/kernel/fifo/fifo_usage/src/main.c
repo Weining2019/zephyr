@@ -40,7 +40,7 @@
 
 struct fdata_t {
 	sys_snode_t snode;
-	u32_t data;
+	uint32_t data;
 };
 
 static K_FIFO_DEFINE(fifo1);
@@ -58,7 +58,7 @@ static struct k_sem end_sema;
 /*entry of contexts*/
 static void tIsr_entry_put(void *p)
 {
-	u32_t i;
+	uint32_t i;
 
 	/* Put items into fifo */
 	for (i = 0U; i < LIST_LEN; i++) {
@@ -70,7 +70,7 @@ static void tIsr_entry_put(void *p)
 static void tIsr_entry_get(void *p)
 {
 	void *rx_data;
-	u32_t i;
+	uint32_t i;
 
 	/* Get items from fifo */
 	for (i = 0U; i < LIST_LEN; i++) {
@@ -83,7 +83,7 @@ static void tIsr_entry_get(void *p)
 static void thread_entry_fn_single(void *p1, void *p2, void *p3)
 {
 	void *rx_data;
-	u32_t i;
+	uint32_t i;
 
 	/* Get items from fifo */
 	for (i = 0U; i < LIST_LEN; i++) {
@@ -103,7 +103,7 @@ static void thread_entry_fn_single(void *p1, void *p2, void *p3)
 static void thread_entry_fn_dual(void *p1, void *p2, void *p3)
 {
 	void *rx_data;
-	u32_t i;
+	uint32_t i;
 
 	for (i = 0U; i < LIST_LEN; i++) {
 		/* Get items from fifo2 */
@@ -144,7 +144,7 @@ static void thread_entry_fn_isr(void *p1, void *p2, void *p3)
 static void test_single_fifo_play(void)
 {
 	void *rx_data;
-	u32_t i;
+	uint32_t i;
 
 	/* Init kernel objects */
 	k_sem_init(&end_sema, 0, 1);
@@ -156,7 +156,7 @@ static void test_single_fifo_play(void)
 
 	k_tid_t tid = k_thread_create(&tdata, tstack, STACK_SIZE,
 				thread_entry_fn_single, &fifo1, NULL, NULL,
-				K_PRIO_PREEMPT(0), K_INHERIT_PERMS, 0);
+				K_PRIO_PREEMPT(0), K_INHERIT_PERMS, K_NO_WAIT);
 
 	/* Let the child thread run */
 	k_sem_take(&end_sema, K_FOREVER);
@@ -183,11 +183,11 @@ static void test_single_fifo_play(void)
 static void test_dual_fifo_play(void)
 {
 	void *rx_data;
-	u32_t i;
+	uint32_t i;
 
 	k_tid_t tid = k_thread_create(&tdata, tstack, STACK_SIZE,
 				thread_entry_fn_dual, &fifo1, &fifo2, NULL,
-				K_PRIO_PREEMPT(0), K_INHERIT_PERMS, 0);
+				K_PRIO_PREEMPT(0), K_INHERIT_PERMS, K_NO_WAIT);
 
 	for (i = 0U; i < LIST_LEN; i++) {
 		/* Put item into fifo */
@@ -219,7 +219,7 @@ static void test_isr_fifo_play(void)
 
 	k_tid_t tid = k_thread_create(&tdata, tstack, STACK_SIZE,
 				thread_entry_fn_isr, &fifo1, &fifo2, NULL,
-				K_PRIO_PREEMPT(0), K_INHERIT_PERMS, 0);
+				K_PRIO_PREEMPT(0), K_INHERIT_PERMS, K_NO_WAIT);
 
 
 	/* Put item into fifo */
@@ -243,8 +243,8 @@ static void test_isr_fifo_play(void)
 void test_main(void)
 {
 	ztest_test_suite(test_fifo_usage,
-			 ztest_unit_test(test_single_fifo_play),
-			 ztest_unit_test(test_dual_fifo_play),
-			 ztest_unit_test(test_isr_fifo_play));
+			 ztest_1cpu_unit_test(test_single_fifo_play),
+			 ztest_1cpu_unit_test(test_dual_fifo_play),
+			 ztest_1cpu_unit_test(test_isr_fifo_play));
 	ztest_run_test_suite(test_fifo_usage);
 }
